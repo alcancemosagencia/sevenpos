@@ -1,0 +1,261 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 33% 97%;
+    --foreground: 224 40% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 40% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 40% 8%;
+    --primary: 218 92% 52%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 218 88% 46%;
+    --success: 158 72% 38%;
+    --warning: 38 92% 52%;
+    --danger: 0 72% 51%;
+    --secondary: 220 28% 93%;
+    --secondary-foreground: 224 24% 18%;
+    --muted: 220 24% 93%;
+    --muted-foreground: 220 11% 43%;
+    --accent: 218 88% 94%;
+    --accent-foreground: 218 82% 31%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 20% 88%;
+    --input: 220 20% 88%;
+    --ring: 218 92% 52%;
+    --radius: 0.5rem;
+    --sidebar: 224 42% 8%;
+    --sidebar-foreground: 220 16% 74%;
+    --sidebar-primary: 218 92% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 36% 13%;
+    --sidebar-accent-foreground: 220 16% 94%;
+    --sidebar-border: 224 28% 17%;
+    --sidebar-ring: 218 92% 56%;
+  }
+
+  .dark {
+    --background: 222 24% 7%;
+    --foreground: 220 16% 94%;
+    --card: 222 22% 10%;
+    --card-foreground: 220 16% 94%;
+    --popover: 222 22% 10%;
+    --popover-foreground: 220 16% 94%;
+    --primary: 218 92% 56%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 218 88% 48%;
+    --success: 158 72% 38%;
+    --warning: 38 92% 52%;
+    --danger: 0 72% 51%;
+    --secondary: 222 18% 15%;
+    --secondary-foreground: 220 14% 88%;
+    --muted: 222 18% 15%;
+    --muted-foreground: 220 8% 58%;
+    --accent: 218 44% 16%;
+    --accent-foreground: 218 92% 72%;
+    --destructive: 0 62% 42%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 18% 17%;
+    --input: 222 18% 17%;
+    --ring: 218 92% 56%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply min-h-full bg-background;
+  }
+
+  body {
+    @apply min-h-full bg-background text-foreground;
+    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+  }
+
+  ::-webkit-scrollbar {
+    height: 5px;
+    width: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border;
+    border-radius: 999px;
+  }
+}
+
+.receipt-print-area {
+  display: none;
+}
+
+.receipt-ticket {
+  width: 58mm;
+  margin: 0 auto;
+  background: white;
+  color: #050505;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.receipt-ticket-80 {
+  width: 80mm;
+}
+
+.receipt-section {
+  border-bottom: 1px dashed #222;
+  padding: 8px 0;
+}
+
+.receipt-center {
+  text-align: center;
+}
+
+.receipt-logo {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #111;
+  border-radius: 4px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.receipt-logo-img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  margin: 0 auto 4px;
+}
+
+.receipt-qr {
+  display: inline-flex;
+  min-width: 26mm;
+  min-height: 16mm;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #111;
+  margin-bottom: 5px;
+  padding: 3px;
+  font-size: 8px;
+  word-break: break-all;
+}
+
+.receipt-ticket h2 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.receipt-ticket p {
+  margin: 0;
+}
+
+.receipt-row,
+.receipt-meta > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.receipt-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.receipt-head,
+.receipt-meta span {
+  color: #444;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.receipt-item {
+  padding: 5px 0;
+}
+
+.receipt-item p {
+  color: #444;
+}
+
+.receipt-totals {
+  display: grid;
+  gap: 4px;
+}
+
+.receipt-total {
+  font-size: 12px;
+}
+
+.receipt-footer {
+  padding: 9px 0 4px;
+}
+
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 58mm;
+    min-height: auto;
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .receipt-print-area,
+  .receipt-print-area * {
+    visibility: visible !important;
+  }
+
+  .receipt-print-area {
+    display: block !important;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 58mm;
+    min-height: auto;
+    background: white;
+    padding: 3mm;
+  }
+
+  .receipt-print-area.receipt-print-80 {
+    width: 80mm;
+  }
+
+  .receipt-print-80 .receipt-ticket {
+    width: 80mm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

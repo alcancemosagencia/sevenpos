@@ -1,0 +1,19 @@
+{
+  "branding": {
+    "logoUrl": "/uploads/admin/logo.png",
+    "commercialName": "SevenPOS",
+    "slogan": ""
+  },
+  "smtp": {
+    "host": "",
+    "port": "587",
+    "username": "",
+    "password": "",
+    "senderEmail": "",
+    "senderName": "SevenPOS"
+  },
+  "superAdminEmails": "",
+  "trialDefaultDays": 30,
+  "defaultCurrency": "USD",
+  "maintenanceMode": false
+}
