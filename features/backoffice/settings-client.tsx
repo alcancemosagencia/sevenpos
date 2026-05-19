@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
+import { UserProfile } from "@clerk/nextjs";
 import {
   BadgeCheck,
   Building2,
@@ -18,6 +19,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { AppModal } from "@/components/shared/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,6 +108,7 @@ export function SettingsClient({
   features: string[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [securityOpen, setSecurityOpen] = useState(false);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const currentPlanIndex = Math.max(0, plans.findIndex((plan) => plan.id === business.plan.id || plan.slug === business.plan.slug));
   const upgradePlans = plans
@@ -132,14 +135,14 @@ export function SettingsClient({
   }
 
   return (
-    <section className="mx-auto w-full max-w-7xl space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="mx-auto w-full max-w-6xl space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Configuración</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Ajustes del negocio</h1>
+          <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">Ajustes del negocio</h1>
           <p className="mt-1 text-sm text-muted-foreground">Perfil, plan, facturación, moneda y operación en un solo lugar.</p>
         </div>
-        <Button asChild variant="outline" className="h-10">
+        <Button asChild variant="outline" className="h-9">
           <Link href={`/${business.slug}`} target="_blank">
             <ExternalLink className="size-4" />
             Ver tienda
@@ -147,10 +150,10 @@ export function SettingsClient({
         </Button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="p-4">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <div className="grid gap-3 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="p-3.5">
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Building2 className="size-4" />
             </div>
             <div>
@@ -159,31 +162,31 @@ export function SettingsClient({
             </div>
           </div>
 
-          <form action={updateBusinessProfileAction} className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <form action={updateBusinessProfileAction} className="space-y-2.5">
+            <div className="grid gap-2.5 sm:grid-cols-2">
               <label className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs">Nombre</Label>
-                <Input name="name" defaultValue={business.name} className="h-10" />
+                <Input name="name" defaultValue={business.name} className="h-9" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Teléfono</Label>
-                <Input name="phone" defaultValue={business.phone ?? ""} className="h-10" />
+                <Input name="phone" defaultValue={business.phone ?? ""} className="h-9" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Email</Label>
-                <Input name="email" type="email" defaultValue={business.email ?? ""} className="h-10" />
+                <Input name="email" type="email" defaultValue={business.email ?? ""} className="h-9" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Ciudad</Label>
-                <Input name="city" defaultValue={business.city ?? ""} className="h-10" />
+                <Input name="city" defaultValue={business.city ?? ""} className="h-9" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">País</Label>
-                <Input name="country" defaultValue={business.country ?? ""} className="h-10" />
+                <Input name="country" defaultValue={business.country ?? ""} className="h-9" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Moneda base</Label>
-                <select name="currency" defaultValue={business.currency} className="h-10 w-full rounded-lg border bg-background px-3 text-sm font-medium">
+                <select name="currency" defaultValue={business.currency} className="h-9 w-full rounded-lg border bg-background px-3 text-sm font-medium">
                   <option value="USD">USD</option>
                   <option value="BS">Bs</option>
                   <option value="CLP">CLP</option>
@@ -191,38 +194,38 @@ export function SettingsClient({
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Timezone</Label>
-                <Input value={timezone} readOnly className="h-10 bg-muted" />
+                <Input value={timezone} readOnly className="h-9 bg-muted" />
               </label>
               <label className="space-y-1.5 sm:col-span-2">
                 <Label className="text-xs">Dirección</Label>
-                <Input name="address" defaultValue={business.address ?? ""} className="h-10" />
+                <Input name="address" defaultValue={business.address ?? ""} className="h-9" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Logo</Label>
-                <Input value={business.logoUrl ?? "Configurable desde Menú público"} readOnly className="h-10 bg-muted" />
+                <Input value={business.logoUrl ?? "Configurable desde Menú público"} readOnly className="h-9 bg-muted" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Slug público</Label>
-                <Input name="slug" defaultValue={business.slug} className="h-10" />
+                <Input name="slug" defaultValue={business.slug} className="h-9" />
               </label>
             </div>
-            <Button className="h-10">Guardar información</Button>
+            <Button className="h-9">Guardar información</Button>
           </form>
         </Card>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <Card className="overflow-hidden">
-            <div className="bg-slate-950 p-4 text-white">
+            <div className="bg-slate-950 p-3.5 text-white">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/55">Plan actual</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight">{business.plan.name}</h2>
+                  <h2 className="mt-1.5 text-xl font-semibold tracking-tight">{business.plan.name}</h2>
                   <p className="mt-1 text-sm text-white/65">{money(business.plan.priceMonthly)} / mes</p>
                 </div>
                 <span className="rounded-lg bg-white/10 px-2 py-1 text-xs font-medium">{statusLabel(business.subscriptionStatus)}</span>
               </div>
             </div>
-            <div className="space-y-3 p-4">
+            <div className="space-y-2.5 p-3.5">
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Usuarios</p>
@@ -247,7 +250,7 @@ export function SettingsClient({
             </div>
           </Card>
 
-          <Card className="p-4">
+          <Card className="p-3.5">
             <div className="mb-3 flex items-center gap-3">
               <CreditCard className="size-4 text-primary" />
               <h2 className="text-sm font-semibold text-slate-900">Facturación</h2>
@@ -293,26 +296,26 @@ export function SettingsClient({
         </Card>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <Card className="p-4">
-          <div className="mb-4 flex items-center gap-3">
+      <div className="grid gap-3 lg:grid-cols-[0.78fr_1.22fr]">
+        <Card className="p-3.5">
+          <div className="mb-3 flex items-center gap-3">
             <Landmark className="size-4 text-primary" />
             <h2 className="text-sm font-semibold text-slate-900">Moneda y tasa</h2>
           </div>
           <form action={updateExchangeRateAction} className="space-y-3">
             <Label className="text-xs">1 USD =</Label>
             <div className="flex gap-2">
-              <Input name="exchangeRate" type="number" min="0.01" step="0.01" defaultValue={business.exchangeRate} className="h-10" />
-              <Button className="h-10">Guardar</Button>
+              <Input name="exchangeRate" type="number" min="0.01" step="0.01" defaultValue={business.exchangeRate} className="h-9" />
+              <Button className="h-9">Guardar</Button>
             </div>
-            <div className="rounded-lg bg-muted/45 p-3 text-sm">
+            <div className="rounded-lg bg-muted/45 p-2.5 text-sm">
               <span className="text-muted-foreground">Preview:</span> <span className="font-semibold">US$10 = Bs {(10 * business.exchangeRate).toFixed(2)}</span>
             </div>
           </form>
         </Card>
 
-        <Card className="p-4">
-          <div className="mb-4 flex items-center gap-3">
+        <Card className="p-3.5">
+          <div className="mb-3 flex items-center gap-3">
             <Printer className="size-4 text-primary" />
             <h2 className="text-sm font-semibold text-slate-900">Configuración operativa</h2>
           </div>
@@ -320,8 +323,8 @@ export function SettingsClient({
             {operationalModules.map((module) => {
               const Icon = module.icon;
               const content = (
-                <div className="flex items-start gap-3 rounded-lg border bg-muted/25 p-3 transition hover:bg-muted/45">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="size-4" /></span>
+                <div className="flex items-start gap-2.5 rounded-lg border bg-muted/25 p-2.5 transition hover:bg-muted/45">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="size-4" /></span>
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{module.label}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{module.description}</p>
@@ -334,28 +337,39 @@ export function SettingsClient({
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card className="p-3.5">
           <div className="mb-3 flex items-center gap-3">
             <Lock className="size-4 text-primary" />
             <h2 className="text-sm font-semibold text-slate-900">Seguridad</h2>
           </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Administra sesiones, dispositivos, contraseña y autenticación de dos factores sin salir de SevenPOS.
+          </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {["Cerrar sesiones", "Dispositivos activos", "Cambiar contraseña", "2FA"].map((item) => (
-              <div key={item} className="rounded-lg border bg-muted/25 p-3 text-sm font-medium text-slate-800">{item}<span className="ml-2 text-xs text-muted-foreground">Próximo</span></div>
+            {["Sesiones", "Dispositivos", "Contraseña", "2FA"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setSecurityOpen(true)}
+                className="rounded-lg border bg-muted/20 px-3 py-2 text-left text-sm font-medium text-slate-800 transition hover:bg-muted/40"
+              >
+                {item}
+                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">Gestionar en Clerk</span>
+              </button>
             ))}
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="p-3.5">
           <div className="mb-3 flex items-center gap-3">
             <ShieldCheck className="size-4 text-primary" />
             <h2 className="text-sm font-semibold text-slate-900">Identificadores</h2>
           </div>
           <Label className="text-xs">ID del negocio</Label>
           <div className="mt-2 flex gap-2">
-            <Input value={business.id} readOnly className="h-10 bg-muted font-mono text-xs" />
-            <Button type="button" variant="outline" size="icon" className="size-10" onClick={() => navigator.clipboard?.writeText(business.id)}>
+            <Input value={business.id} readOnly className="h-9 bg-muted font-mono text-xs" />
+            <Button type="button" variant="outline" size="icon" className="size-9" onClick={() => navigator.clipboard?.writeText(business.id)}>
               <Copy className="size-4" />
             </Button>
           </div>
@@ -365,6 +379,28 @@ export function SettingsClient({
           </div>
         </Card>
       </div>
+
+      <AppModal
+        open={securityOpen}
+        onClose={() => setSecurityOpen(false)}
+        title="Seguridad de la cuenta"
+        description="Sesiones, dispositivos, contraseña y 2FA gestionados con Clerk."
+        size="lg"
+      >
+        <div className="max-h-[72vh] overflow-y-auto p-2">
+          <UserProfile
+            routing="hash"
+            appearance={{
+              elements: {
+                rootBox: "w-full",
+                cardBox: "w-full shadow-none border-0",
+                navbar: "hidden",
+                pageScrollBox: "p-0",
+              },
+            }}
+          />
+        </div>
+      </AppModal>
     </section>
   );
 }

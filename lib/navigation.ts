@@ -174,7 +174,7 @@ export const navigationItems: NavigationItem[] = [
 
 export const mobileMoreItem = {
   href: "/more",
-  label: "Mas",
-  shortLabel: "Mas",
+  label: "Más",
+  shortLabel: "Más",
   icon: MoreHorizontal,
 };

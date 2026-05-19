@@ -4,7 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadCart, saveCart } from "@/features/pos/cart-storage";
 import type { CartItem, PosProduct } from "@/features/pos/types";
 
-export function useCart(businessId: string, exchangeRate: number) {
+export function useCart(
+  businessId: string,
+  exchangeRate: number,
+  options?: {
+    taxesEnabled?: boolean;
+    taxRate?: number;
+    tipsEnabled?: boolean;
+    tipRate?: number;
+    tipMode?: string;
+  },
+) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -98,17 +108,26 @@ export function useCart(businessId: string, exchangeRate: number) {
 
   const totals = useMemo(() => {
     const subtotalUsd = items.reduce((sum, item) => sum + item.unitPriceUsd * item.quantity, 0);
+    const taxUsd = options?.taxesEnabled ? subtotalUsd * ((options.taxRate ?? 0) / 100) : 0;
+    const tipUsd = options?.tipsEnabled && options.tipMode === "AUTO" ? subtotalUsd * ((options.tipRate ?? 0) / 100) : 0;
+    const totalUsd = subtotalUsd + taxUsd + tipUsd;
     const subtotalBs = subtotalUsd * exchangeRate;
+    const taxBs = taxUsd * exchangeRate;
+    const tipBs = tipUsd * exchangeRate;
     const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
     return {
       subtotalUsd,
       subtotalBs,
-      totalUsd: subtotalUsd,
-      totalBs: subtotalBs,
+      taxUsd,
+      taxBs,
+      tipUsd,
+      tipBs,
+      totalUsd,
+      totalBs: totalUsd * exchangeRate,
       totalItems,
     };
-  }, [exchangeRate, items]);
+  }, [exchangeRate, items, options?.taxRate, options?.taxesEnabled, options?.tipMode, options?.tipRate, options?.tipsEnabled]);
 
   return {
     items,

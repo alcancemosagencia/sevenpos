@@ -13,6 +13,9 @@ export function MobileCartSheet({
   tenderMode,
   loading,
   totalItems,
+  subtotalUsd,
+  taxUsd,
+  tipUsd,
   totalUsd,
   totalBs,
   exchangeRate,
@@ -33,6 +36,9 @@ export function MobileCartSheet({
   tenderMode: TenderMode;
   loading: boolean;
   totalItems: number;
+  subtotalUsd?: number;
+  taxUsd?: number;
+  tipUsd?: number;
   totalUsd: number;
   totalBs: number;
   exchangeRate: number;
@@ -128,6 +134,9 @@ export function MobileCartSheet({
                   tenderMode={tenderMode}
                   loading={loading}
                   totalItems={totalItems}
+                  subtotalUsd={subtotalUsd}
+                  taxUsd={taxUsd}
+                  tipUsd={tipUsd}
                   totalUsd={totalUsd}
                   totalBs={totalBs}
                   exchangeRate={exchangeRate}

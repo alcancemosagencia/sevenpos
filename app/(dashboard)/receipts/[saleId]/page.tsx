@@ -51,6 +51,9 @@ export default async function ReceiptPage({
 
   const exchangeRate = decimalToNumber(sale.business.exchangeRate);
   const totalUsd = sale.currency === "USD" ? decimalToNumber(sale.total) : decimalToNumber(sale.total) / exchangeRate;
+  const subtotalUsd = sale.currency === "USD" ? decimalToNumber(sale.subtotal) : decimalToNumber(sale.subtotal) / exchangeRate;
+  const taxUsd = sale.currency === "USD" ? decimalToNumber(sale.taxTotal) : decimalToNumber(sale.taxTotal) / exchangeRate;
+  const tipUsd = sale.currency === "USD" ? decimalToNumber(sale.tipTotal) : decimalToNumber(sale.tipTotal) / exchangeRate;
   const receipt: ReceiptData = {
     id: sale.id,
     businessName: sale.business.name,
@@ -59,7 +62,9 @@ export default async function ReceiptPage({
     cashierName: sale.cashier.fullName ?? sale.cashier.email,
     createdAt: sale.createdAt,
     exchangeRate,
-    subtotalUsd: totalUsd,
+    subtotalUsd,
+    taxUsd,
+    tipUsd,
     totalUsd,
     totalBs: totalUsd * exchangeRate,
     payment: {

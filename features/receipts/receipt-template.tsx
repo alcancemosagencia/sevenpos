@@ -76,6 +76,12 @@ export function ReceiptTemplate({ receipt, size = "58" }: { receipt: ReceiptData
           <span>Impuestos</span>
           <strong>{money(receipt.taxUsd ?? 0, "USD")}</strong>
         </div>
+        {(receipt.tipUsd ?? 0) > 0 ? (
+          <div className="receipt-row">
+            <span>Propina</span>
+            <strong>{money(receipt.tipUsd ?? 0, "USD")}</strong>
+          </div>
+        ) : null}
         <div className="receipt-row">
           <span>Descuento</span>
           <strong>{money(receipt.discountUsd ?? 0, "USD")}</strong>

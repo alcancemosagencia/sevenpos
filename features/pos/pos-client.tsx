@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useActionState, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Banknote, CheckCircle2, MinusCircle, Monitor, PackagePlus, Search, X } from "lucide-react";
@@ -8,15 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PremiumModal } from "@/components/shared/premium-modal";
-import { createQuickExpenseAction, type CashActionState } from "@/features/cash/actions";
-import { checkoutAction } from "@/features/pos/actions";
 import { CartPanel } from "@/features/pos/cart-panel";
 import { money } from "@/features/pos/format";
 import { MobileCartSheet } from "@/features/pos/mobile-cart-sheet";
 import { ProductGrid } from "@/features/pos/product-grid";
 import { useCart } from "@/features/pos/use-cart";
 import type { PaymentMethod, PosPreSale, PosProduct, ProductCategory, TenderMode } from "@/features/pos/types";
-import { createProductAction, type ProductActionState } from "@/features/products/actions";
 import { AutoPrint, NewSaleButton, PrintReceiptButton } from "@/features/receipts/receipt-actions";
 import { ReceiptTemplate } from "@/features/receipts/receipt-template";
 import type { ReceiptData } from "@/features/receipts/types";
@@ -24,13 +21,16 @@ import { dispatchDrawerKick, dispatchKitchenPrint } from "@/features/hardware/es
 import type { HardwareSettings } from "@/features/hardware/settings";
 import { createOfflineId, offlineStore } from "@/features/pwa/offline-store";
 
-const expenseInitialState: CashActionState = {};
-const productInitialState: ProductActionState = {};
-
 type PosToast = {
   id: number;
   tone: "success" | "error" | "info";
   message: string;
+};
+
+type PosApiResult = {
+  ok: boolean;
+  saleId?: string;
+  error?: string;
 };
 
 type AudioWindow = Window &
@@ -52,6 +52,23 @@ const paymentLabels: Record<TenderMode, string> = {
   BANK_TRANSFER: "Transferencia",
 };
 
+async function readApiResult(response: Response, fallback: string): Promise<PosApiResult> {
+  const text = await response.text();
+  let payload: PosApiResult = { ok: false, error: fallback };
+
+  try {
+    payload = text ? (JSON.parse(text) as PosApiResult) : payload;
+  } catch {
+    payload = { ok: false, error: fallback };
+  }
+
+  if (!response.ok && !payload.error) {
+    return { ok: false, error: fallback };
+  }
+
+  return payload;
+}
+
 export function PosClient({
   businessId,
   businessName,
@@ -65,6 +82,7 @@ export function PosClient({
   cashierName,
   branchName,
   hardwareSettings,
+  taxSettings,
 }: {
   businessId: string;
   businessName: string;
@@ -86,6 +104,14 @@ export function PosClient({
   cashierName: string;
   branchName: string;
   hardwareSettings: HardwareSettings;
+  taxSettings: {
+    taxesEnabled: boolean;
+    taxRate: number;
+    customTaxName: string | null;
+    tipsEnabled: boolean;
+    tipRate: number;
+    tipMode: string;
+  } | null;
 }) {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -109,10 +135,20 @@ export function PosClient({
   const [activePreSaleId, setActivePreSaleId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
   const [pendingOfflineSales, setPendingOfflineSales] = useState(0);
-  const [isPending, startTransition] = useTransition();
-  const [expenseState, expenseAction, expensePending] = useActionState(createQuickExpenseAction, expenseInitialState);
-  const [productState, productAction, productPending] = useActionState(createProductAction, productInitialState);
-  const cart = useCart(businessId, exchangeRate);
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [expensePending, setExpensePending] = useState(false);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
+  const [expenseOk, setExpenseOk] = useState(false);
+  const [productPending, setProductPending] = useState(false);
+  const [productError, setProductError] = useState<string | null>(null);
+  const [productOk, setProductOk] = useState(false);
+  const cart = useCart(businessId, exchangeRate, {
+    taxesEnabled: taxSettings?.taxesEnabled,
+    taxRate: taxSettings?.taxRate,
+    tipsEnabled: taxSettings?.tipsEnabled,
+    tipRate: taxSettings?.tipRate,
+    tipMode: taxSettings?.tipMode,
+  });
 
   const showToast = useCallback((message: string, tone: PosToast["tone"] = "info") => {
     const id = ++toastIdRef.current;
@@ -202,6 +238,8 @@ export function PosClient({
       createdAt: new Date().toISOString(),
       exchangeRate,
       subtotalUsd: cart.subtotalUsd,
+      taxUsd: cart.taxUsd,
+      tipUsd: cart.tipUsd,
       totalUsd: cart.totalUsd,
       totalBs: cart.totalBs,
       payment: {
@@ -229,6 +267,8 @@ export function PosClient({
     cashierName,
     cart.items,
     cart.subtotalUsd,
+    cart.taxUsd,
+    cart.tipUsd,
     cart.totalBs,
     cart.totalUsd,
     exchangeRate,
@@ -286,7 +326,7 @@ export function PosClient({
   }, [addProductToCart, findScannedProduct, playSound, showToast]);
 
   const handleCheckout = useCallback(() => {
-    if (cart.items.length === 0 || isPending || checkoutLockRef.current) {
+    if (cart.items.length === 0 || checkoutPending || checkoutLockRef.current) {
       if (cart.items.length === 0) {
         showToast("Carrito vacio", "error");
         playSound("error");
@@ -341,47 +381,60 @@ export function PosClient({
       return;
     }
 
-    startTransition(async () => {
-      const result = await checkoutAction({
-        requestId: crypto.randomUUID(),
-        paymentMethod: checkoutPaymentMethod,
-        currency: checkoutCurrency,
-        cashReceivedUsd: tenderMode === "MIXED" ? Number(paidUsd || 0) : undefined,
-        cashReceivedBs: tenderMode === "MIXED" ? Number(paidBs || 0) : undefined,
-        preSaleId: activePreSaleId,
-        items: cart.items.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
-      });
+    setCheckoutPending(true);
+    void (async () => {
+      try {
+        const response = await fetch("/api/pos/checkout", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            requestId: crypto.randomUUID(),
+            paymentMethod: checkoutPaymentMethod,
+            currency: checkoutCurrency,
+            cashReceivedUsd: tenderMode === "MIXED" ? Number(paidUsd || 0) : undefined,
+            cashReceivedBs: tenderMode === "MIXED" ? Number(paidBs || 0) : undefined,
+            preSaleId: activePreSaleId,
+            items: cart.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+          }),
+        });
+        const result = await readApiResult(response, "No pudimos registrar la venta.");
 
-      if (result.ok && result.saleId) {
-        setLastReceipt(buildReceipt(result.saleId));
-        cart.clearCart();
-        setCartOpen(false);
-        setPaidUsd("");
-        setPaidBs("");
-        setActivePreSaleId(null);
-        setMessage("Venta registrada");
-        showToast("Venta realizada", "success");
-        playSound("success");
-        dispatchDrawerKick(hardwareSettings.openDrawerOnCash && (tenderMode === "CASH_USD" || tenderMode === "CASH_BS"));
-        dispatchKitchenPrint({ saleId: result.saleId, items: cart.items, branchName });
+        if (result.ok && result.saleId) {
+          setLastReceipt(buildReceipt(result.saleId));
+          cart.clearCart();
+          setCartOpen(false);
+          setPaidUsd("");
+          setPaidBs("");
+          setActivePreSaleId(null);
+          setMessage("Venta registrada");
+          showToast("Venta realizada", "success");
+          playSound("success");
+          dispatchDrawerKick(hardwareSettings.openDrawerOnCash && (tenderMode === "CASH_USD" || tenderMode === "CASH_BS"));
+          dispatchKitchenPrint({ saleId: result.saleId, items: cart.items, branchName });
+          return;
+        }
+
+        showToast(result.error ?? "No pudimos registrar la venta.", "error");
+        playSound("error");
+        setMessage(result.error ?? "No pudimos registrar la venta.");
+      } catch {
+        showToast("No pudimos registrar la venta.", "error");
+        playSound("error");
+        setMessage("No pudimos registrar la venta.");
+      } finally {
         checkoutLockRef.current = false;
-        return;
+        setCheckoutPending(false);
       }
-
-      showToast(result.error ?? "No pudimos registrar la venta.", "error");
-      playSound("error");
-      setMessage(result.error ?? "No pudimos registrar la venta.");
-      checkoutLockRef.current = false;
-    });
+    })();
   }, [
     buildReceipt,
     cart,
     checkoutCurrency,
     checkoutPaymentMethod,
-    isPending,
+    checkoutPending,
     paidBs,
     paidUsd,
     playSound,
@@ -426,25 +479,81 @@ export function PosClient({
     }
   }, [cartOpen, expenseOpen, quickProductOpen]);
 
-  useEffect(() => {
-    if (expenseState.ok) {
-      showToast("Gasto registrado", "success");
-      playSound("success");
-    } else if (expenseState.error) {
-      showToast(expenseState.error, "error");
-      playSound("error");
-    }
-  }, [expenseState.error, expenseState.ok, playSound, showToast]);
+  const handleExpenseSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setExpensePending(true);
+    setExpenseError(null);
+    setExpenseOk(false);
 
-  useEffect(() => {
-    if (productState.ok) {
-      showToast("Producto creado", "success");
-      playSound("success");
-    } else if (productState.error) {
-      showToast(productState.error, "error");
-      playSound("error");
-    }
-  }, [playSound, productState.error, productState.ok, showToast]);
+    void (async () => {
+      try {
+        const response = await fetch("/api/pos/quick-expense", {
+          method: "POST",
+          body: formData,
+        });
+        const result = await readApiResult(response, "No pudimos registrar el gasto.");
+
+        if (result.ok) {
+          setExpenseOk(true);
+          setExpenseOpen(false);
+          showToast("Gasto registrado", "success");
+          playSound("success");
+          router.refresh();
+          return;
+        }
+
+        setExpenseError(result.error ?? "No pudimos registrar el gasto.");
+        showToast(result.error ?? "No pudimos registrar el gasto.", "error");
+        playSound("error");
+      } catch {
+        setExpenseError("No pudimos registrar el gasto.");
+        showToast("No pudimos registrar el gasto.", "error");
+        playSound("error");
+      } finally {
+        setExpensePending(false);
+      }
+    })();
+  }, [playSound, router, showToast]);
+
+  const handleQuickProductSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setProductPending(true);
+    setProductError(null);
+    setProductOk(false);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/pos/quick-product", {
+          method: "POST",
+          body: formData,
+        });
+        const result = await readApiResult(response, "No pudimos crear el producto.");
+
+        if (result.ok) {
+          form.reset();
+          setProductOk(true);
+          setQuickProductOpen(false);
+          showToast("Producto creado", "success");
+          playSound("success");
+          router.refresh();
+          return;
+        }
+
+        setProductError(result.error ?? "No pudimos crear el producto.");
+        showToast(result.error ?? "No pudimos crear el producto.", "error");
+        playSound("error");
+      } catch {
+        setProductError("No pudimos crear el producto.");
+        showToast("No pudimos crear el producto.", "error");
+        playSound("error");
+      } finally {
+        setProductPending(false);
+      }
+    })();
+  }, [playSound, router, showToast]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -699,8 +808,11 @@ export function PosClient({
         <CartPanel
           items={cart.items}
           tenderMode={tenderMode}
-          loading={isPending}
+          loading={checkoutPending}
           totalItems={cart.totalItems}
+          subtotalUsd={cart.subtotalUsd}
+          taxUsd={cart.taxUsd}
+          tipUsd={cart.tipUsd}
           totalUsd={cart.totalUsd}
           totalBs={cart.totalBs}
           exchangeRate={exchangeRate}
@@ -721,8 +833,11 @@ export function PosClient({
         open={cartOpen}
         items={cart.items}
         tenderMode={tenderMode}
-        loading={isPending}
+        loading={checkoutPending}
         totalItems={cart.totalItems}
+        subtotalUsd={cart.subtotalUsd}
+        taxUsd={cart.taxUsd}
+        tipUsd={cart.tipUsd}
         totalUsd={cart.totalUsd}
         totalBs={cart.totalBs}
         exchangeRate={exchangeRate}
@@ -786,7 +901,7 @@ export function PosClient({
                 <p className="text-base font-semibold">Gasto rapido</p>
                 <p className="text-sm text-muted-foreground">Registra una salida de efectivo de caja.</p>
               </div>
-              <form action={expenseAction} className="space-y-3">
+              <form onSubmit={handleExpenseSubmit} className="space-y-3">
                 <div className="grid grid-cols-[1fr_110px] gap-2">
                   <Input name="amount" type="number" min="0.01" step="0.01" placeholder="Monto" required />
                   <select name="currency" defaultValue="USD" className="h-11 rounded-lg border bg-background px-3 text-sm font-medium">
@@ -795,8 +910,8 @@ export function PosClient({
                   </select>
                 </div>
                 <Input name="note" placeholder="Nota" />
-                {expenseState.error ? <p className="text-sm font-semibold text-destructive">{expenseState.error}</p> : null}
-                {expenseState.ok ? <p className="text-sm font-semibold text-primary">Gasto registrado</p> : null}
+                {expenseError ? <p className="text-sm font-semibold text-destructive">{expenseError}</p> : null}
+                {expenseOk ? <p className="text-sm font-semibold text-primary">Gasto registrado</p> : null}
                 <div className="flex gap-2">
                   <Button type="button" variant="secondary" className="flex-1" onClick={() => setExpenseOpen(false)}>
                     Cancelar
@@ -816,7 +931,7 @@ export function PosClient({
         description="F2 abre este formulario. Disponible en POS al guardar."
         onClose={() => setQuickProductOpen(false)}
       >
-        <form action={productAction} className="space-y-3 p-4">
+        <form onSubmit={handleQuickProductSubmit} className="space-y-3 p-4">
           <div className="space-y-1.5">
             <Label className="text-xs">Nombre</Label>
             <Input name="name" className="h-10" required autoFocus />
@@ -852,8 +967,8 @@ export function PosClient({
           </div>
           <input type="hidden" name="priceBs" value={(Number(0)).toString()} />
           <input type="hidden" name="lowStockAlert" value="5" />
-          {productState.error ? <p className="text-sm font-semibold text-destructive">{productState.error}</p> : null}
-          {productState.ok ? <p className="text-sm font-semibold text-primary">Producto creado. Actualiza POS para verlo.</p> : null}
+          {productError ? <p className="text-sm font-semibold text-destructive">{productError}</p> : null}
+          {productOk ? <p className="text-sm font-semibold text-primary">Producto creado.</p> : null}
           <div className="flex gap-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setQuickProductOpen(false)}>
               Cancelar

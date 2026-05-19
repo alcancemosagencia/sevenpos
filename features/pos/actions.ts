@@ -68,6 +68,17 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
         select: { exchangeRate: true },
       });
       const exchangeRate = Math.max(0.0001, Number(business?.exchangeRate.toString() ?? "1"));
+      const taxSettings = await tx.businessTaxSettings.findUnique({
+        where: { businessId },
+        select: {
+          taxesEnabled: true,
+          ivaRate: true,
+          customTaxRate: true,
+          tipsEnabled: true,
+          tipRate: true,
+          tipMode: true,
+        },
+      });
 
       const cashSession = await tx.cashSession.findFirst({
         where: { businessId, branchId: branch.id, status: "OPEN" },
@@ -139,8 +150,15 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
       });
 
       const subtotal = lineItems.reduce((sum, item) => sum.add(item.subtotal), lineItems[0].subtotal.mul(0));
-      const subtotalNumber = Number(subtotal.toString());
-      const totalUsd = input.currency === "BS" ? subtotalNumber / exchangeRate : subtotalNumber;
+      const taxRate = taxSettings?.taxesEnabled
+        ? Number(taxSettings.ivaRate.toString()) + Number(taxSettings.customTaxRate.toString())
+        : 0;
+      const tipRate = taxSettings?.tipsEnabled && taxSettings.tipMode === "AUTO" ? Number(taxSettings.tipRate.toString()) : 0;
+      const taxTotal = subtotal.mul(taxRate.toString()).div(100);
+      const tipTotal = subtotal.mul(tipRate.toString()).div(100);
+      const total = subtotal.add(taxTotal).add(tipTotal);
+      const totalNumber = Number(total.toString());
+      const totalUsd = input.currency === "BS" ? totalNumber / exchangeRate : totalNumber;
       const receivedUsd = Math.max(0, input.cashReceivedUsd ?? 0);
       const receivedBs = Math.max(0, input.cashReceivedBs ?? 0);
 
@@ -156,7 +174,9 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
           businessId,
           branchId: branch.id,
           subtotal,
-          total: subtotal,
+          taxTotal,
+          tipTotal,
+          total,
           currency: input.currency,
           paymentMethod: input.paymentMethod,
           cashierId: tenant.currentUser.id,
@@ -215,13 +235,13 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
           receivedUsd > 0 || receivedBs > 0
             ? receivedUsd
             : input.currency === "USD"
-              ? subtotalNumber
+              ? totalNumber
               : 0;
         const cashAmountBs =
           receivedUsd > 0 || receivedBs > 0
             ? receivedBs
             : input.currency === "BS"
-              ? subtotalNumber
+              ? totalNumber
               : 0;
 
         await tx.cashMovement.create({
@@ -254,7 +274,9 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
           module: "POS",
           metadata: {
             saleId: createdSale.id,
-            total: subtotalNumber,
+            total: totalNumber,
+            taxTotal: Number(taxTotal.toString()),
+            tipTotal: Number(tipTotal.toString()),
             paymentMethod: input.paymentMethod,
             preSaleId: input.preSaleId ?? null,
           },

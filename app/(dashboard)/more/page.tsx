@@ -29,7 +29,7 @@ export default async function MorePage() {
 
   return (
     <>
-      <PageHeader title="Mas" description="Accesos secundarios optimizados para mobile." />
+      <PageHeader title="Más" description="Accesos secundarios optimizados para mobile." />
       <div className="space-y-4">
         {groups.map(([group, items]) => (
           <section key={group} className="space-y-2">

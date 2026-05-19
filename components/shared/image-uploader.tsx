@@ -17,6 +17,20 @@ type ImageUploaderProps = {
   variant?: "default" | "compact" | "avatar";
 };
 
+function uploadErrorMessage(message: string | undefined, maxMb: number) {
+  const normalized = (message ?? "").toLowerCase();
+
+  if (normalized.includes("size") || normalized.includes("large") || normalized.includes("max") || normalized.includes("excede")) {
+    return `⚠️ La imagen excede el tamaño máximo permitido de ${maxMb}MB`;
+  }
+
+  if (normalized.includes("tipo") || normalized.includes("format") || normalized.includes("mime")) {
+    return "⚠️ Formato no permitido. Usa PNG, JPG o WEBP.";
+  }
+
+  return "No pudimos subir la imagen. Intenta nuevamente.";
+}
+
 export function ImageUploader({
   name,
   label,
@@ -43,14 +57,15 @@ export function ImageUploader({
   async function upload(file: File | null | undefined) {
     if (!file) return;
     setError(null);
+    const maxMb = imageUploadLimitsMb[kind];
 
     if (!isAllowedImageType(file.type)) {
-      setError("Usa PNG, JPG, JPEG o WEBP.");
+      setError("⚠️ Formato no permitido. Usa PNG, JPG o WEBP.");
       return;
     }
 
-    if (file.size > imageUploadLimitsMb[kind] * 1024 * 1024) {
-      setError(`Maximo ${imageUploadLimitsMb[kind]}MB.`);
+    if (file.size > maxMb * 1024 * 1024) {
+      setError(`⚠️ La imagen excede el tamaño máximo permitido de ${maxMb}MB`);
       return;
     }
 
@@ -66,17 +81,24 @@ export function ImageUploader({
         method: "POST",
         body: formData,
       });
-      const payload = (await response.json()) as { url?: string; error?: string };
+      const text = await response.text();
+      let payload: { url?: string; error?: string } = {};
+
+      try {
+        payload = text ? (JSON.parse(text) as { url?: string; error?: string }) : {};
+      } catch {
+        payload = {};
+      }
 
       if (!response.ok || !payload.url) {
-        throw new Error(payload.error ?? "No pudimos subir la imagen.");
+        throw new Error(uploadErrorMessage(payload.error, maxMb));
       }
 
       setUrl(payload.url);
       setPreview(payload.url);
       onChange?.(payload.url);
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "No pudimos subir la imagen.");
+      setError(uploadError instanceof Error ? uploadErrorMessage(uploadError.message, maxMb) : "No pudimos subir la imagen. Intenta nuevamente.");
       setPreview(url);
     } finally {
       setPending(false);
@@ -94,7 +116,7 @@ export function ImageUploader({
   }
 
   return (
-    <div className={cn("space-y-1.5", isAvatar && "max-w-[136px]", className)}>
+    <div className={cn("space-y-1.5", isAvatar && "max-w-[116px]", className)}>
       <div className={cn("flex items-center justify-between gap-3", isAvatar && "max-w-[112px]")}>
         <label className="text-xs font-medium text-muted-foreground">{label}</label>
         <span className="text-[11px] font-medium text-muted-foreground">Max. {imageUploadLimitsMb[kind]}MB</span>
@@ -121,10 +143,10 @@ export function ImageUploader({
           void upload(event.dataTransfer.files?.[0]);
         }}
         className={cn(
-          "group relative flex w-full overflow-hidden rounded-lg border border-dashed bg-muted/30 text-left transition hover:border-primary/50 hover:bg-primary/5",
-          variant === "default" && "min-h-36",
-          variant === "compact" && "min-h-24",
-          isAvatar && "size-28 min-h-0 shrink-0",
+          "group relative flex w-full overflow-hidden rounded-lg border border-dashed bg-muted/25 text-left transition hover:border-primary/50 hover:bg-primary/5",
+          variant === "default" && "min-h-32",
+          variant === "compact" && "min-h-20",
+          isAvatar && "size-24 min-h-0 shrink-0",
           dragging && "border-primary bg-primary/5",
           previewClassName,
         )}
@@ -138,7 +160,7 @@ export function ImageUploader({
               <ImageIcon className={cn(isAvatar ? "size-4" : "size-5")} />
             </span>
             <span className={cn("font-medium text-slate-800", isAvatar ? "text-xs" : "text-sm")}>Subir imagen</span>
-            {!isAvatar ? <span className="text-xs text-muted-foreground">Click o arrastra aqui</span> : null}
+            {!isAvatar ? <span className="text-xs text-muted-foreground">Click o arrastra aquí</span> : null}
           </div>
         )}
         <span className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-slate-950/72 px-3 py-2 text-xs font-medium text-white opacity-100 backdrop-blur-sm transition sm:opacity-0 sm:group-hover:opacity-100">

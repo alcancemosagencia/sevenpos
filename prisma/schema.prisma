@@ -162,6 +162,7 @@ model Business {
   stockTransfers       StockTransfer[]
   preSales             PreSale[]
   hardwareSettings     BusinessHardwareSettings?
+  taxSettings          BusinessTaxSettings?
   publicSettings       BusinessPublicSettings?
   publicOrders         PublicOrder[]
   accessRoles          AccessRole[]
@@ -272,6 +273,21 @@ model BusinessHardwareSettings {
   advancedHardware   Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+}
+
+model BusinessTaxSettings {
+  id            String   @id @default(cuid())
+  businessId    String   @unique
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  taxesEnabled  Boolean  @default(false)
+  ivaRate       Decimal  @default(0) @db.Decimal(5, 2)
+  customTaxName String?
+  customTaxRate Decimal  @default(0) @db.Decimal(5, 2)
+  tipsEnabled   Boolean  @default(false)
+  tipRate       Decimal  @default(0) @db.Decimal(5, 2)
+  tipMode       String   @default("MANUAL")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model User {
@@ -458,6 +474,8 @@ model Sale {
   branch        Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
   total         Decimal       @db.Decimal(12, 2)
   subtotal      Decimal       @db.Decimal(12, 2)
+  taxTotal      Decimal       @default(0) @db.Decimal(12, 2)
+  tipTotal      Decimal       @default(0) @db.Decimal(12, 2)
   currency      SaleCurrency  @default(USD)
   paymentMethod PaymentMethod
   kdsStatus     KdsStatus     @default(PENDING)

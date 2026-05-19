@@ -7,6 +7,9 @@ import { PosClient } from "@/features/pos/pos-client";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 export default async function PosPage() {
   const tenant = await requireTenantContext();
 
@@ -39,6 +42,18 @@ export default async function PosPage() {
     orderBy: { name: "asc" },
   });
   const cashSession = await getOpenCashSessionSummary(tenant.businessId, branch.id);
+  const taxSettings = await prisma.businessTaxSettings.findUnique({
+    where: { businessId: tenant.businessId },
+    select: {
+      taxesEnabled: true,
+      ivaRate: true,
+      customTaxRate: true,
+      customTaxName: true,
+      tipsEnabled: true,
+      tipRate: true,
+      tipMode: true,
+    },
+  });
   const preSales = await prisma.preSale.findMany({
     where: {
       businessId: tenant.businessId,
@@ -103,6 +118,14 @@ export default async function PosPage() {
       cashierName={tenant.currentUser.fullName ?? tenant.currentUser.email}
       branchName={branch.name}
       hardwareSettings={hardwareSettings}
+      taxSettings={taxSettings ? {
+        taxesEnabled: taxSettings.taxesEnabled,
+        taxRate: decimalToNumber(taxSettings.ivaRate) + decimalToNumber(taxSettings.customTaxRate),
+        customTaxName: taxSettings.customTaxName,
+        tipsEnabled: taxSettings.tipsEnabled,
+        tipRate: decimalToNumber(taxSettings.tipRate),
+        tipMode: taxSettings.tipMode,
+      } : null}
     />
   );
 }

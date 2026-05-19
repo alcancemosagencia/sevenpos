@@ -19,6 +19,9 @@ export function CartPanel({
   tenderMode,
   loading,
   totalItems,
+  subtotalUsd,
+  taxUsd,
+  tipUsd,
   totalUsd,
   totalBs,
   exchangeRate,
@@ -37,6 +40,9 @@ export function CartPanel({
   tenderMode: TenderMode;
   loading: boolean;
   totalItems: number;
+  subtotalUsd?: number;
+  taxUsd?: number;
+  tipUsd?: number;
   totalUsd: number;
   totalBs: number;
   exchangeRate: number;
@@ -229,11 +235,23 @@ export function CartPanel({
         <div className="mb-3 space-y-1 border-t pt-3">
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Subtotal USD</span>
-            <span className="font-semibold">{money(totalUsd, "USD")}</span>
+            <span className="font-semibold">{money(subtotalUsd ?? totalUsd, "USD")}</span>
           </div>
+          {(taxUsd ?? 0) > 0 ? (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Impuestos</span>
+              <span className="font-semibold">{money(taxUsd ?? 0, "USD")}</span>
+            </div>
+          ) : null}
+          {(tipUsd ?? 0) > 0 ? (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Propina</span>
+              <span className="font-semibold">{money(tipUsd ?? 0, "USD")}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Subtotal Bs</span>
-            <span className="font-semibold">Bs {totalBs.toFixed(2)}</span>
+            <span className="font-semibold">Bs {((subtotalUsd ?? totalUsd) * exchangeRate).toFixed(2)}</span>
           </div>
           <div className="flex items-end justify-between pt-2">
             <span className="text-sm font-semibold">Total</span>

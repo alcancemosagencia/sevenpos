@@ -199,14 +199,16 @@ export function PublicMenuSettingsClient({
               </div>
             </div>
 
-            <div className={activeTab === "brand" ? "space-y-4" : "hidden"}>
-              <section className="rounded-lg border bg-muted/20 p-3 shadow-[0_12px_36px_hsl(224_36%_14%/0.04)]">
-                <div className="mb-3 flex items-start justify-between gap-3">
+            <div className={activeTab === "brand" ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]" : "hidden"}>
+              <section className="rounded-lg border bg-muted/20 p-4 shadow-[0_12px_36px_hsl(224_36%_14%/0.04)] lg:col-span-2">
+                <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">Portada del menu</p>
-                    <p className="text-xs text-muted-foreground">Imagen horizontal para el hero publico.</p>
+                    <p className="text-sm font-medium text-slate-900">Portada del menú</p>
+                    <p className="text-xs text-muted-foreground">Imagen horizontal para el hero público.</p>
                   </div>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">Preview instantaneo</span>
+                  <span className="inline-flex h-7 items-center justify-center rounded-full bg-primary/10 px-2.5 text-center text-[11px] font-medium leading-none text-primary">
+                    Preview instantáneo
+                  </span>
                 </div>
                 <ImageUploader
                   name="coverImageUrl"
@@ -215,14 +217,13 @@ export function PublicMenuSettingsClient({
                   value={draft.coverImageUrl ?? ""}
                   onChange={(value) => updateDraft("coverImageUrl", value)}
                   variant="compact"
-                  previewClassName="min-h-28"
+                  previewClassName="min-h-24"
                 />
               </section>
 
-              <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
-                <section className="rounded-lg border bg-background p-3 shadow-[0_12px_36px_hsl(224_36%_14%/0.04)]">
+                <section className="rounded-lg border bg-background p-4 shadow-[0_12px_36px_hsl(224_36%_14%/0.04)]">
                   <div className="mb-3">
-                    <p className="text-sm font-medium text-slate-900">Logo publico</p>
+                    <p className="text-sm font-medium text-slate-900">Logo público</p>
                     <p className="text-xs text-muted-foreground">Marca compacta visible en la tienda.</p>
                   </div>
                   <div className="flex items-start gap-3">
@@ -234,22 +235,21 @@ export function PublicMenuSettingsClient({
                       onChange={(value) => updateDraft("logoUrl", value)}
                       variant="avatar"
                     />
-                    <div className="min-w-0 flex-1 pt-6">
+                    <div className="min-w-0 flex-1 pt-5">
                       <p className="truncate text-sm font-medium text-slate-800">{safeBusiness.name}</p>
                       <p className="mt-1 text-xs text-muted-foreground">PNG, JPG o WEBP. Ideal cuadrado.</p>
                     </div>
                   </div>
                 </section>
 
-                <section className="grid gap-3 rounded-lg border bg-background p-3 shadow-[0_12px_36px_hsl(224_36%_14%/0.04)] sm:grid-cols-2">
+                <section className="grid gap-3 rounded-lg border bg-background p-4 shadow-[0_12px_36px_hsl(224_36%_14%/0.04)] sm:grid-cols-2">
                   <div className="sm:col-span-2">
-                    <p className="text-sm font-medium text-slate-900">Reputacion y legales</p>
+                    <p className="text-sm font-medium text-slate-900">Reputación y legales</p>
                     <p className="text-xs text-muted-foreground">Datos visibles en el hero y antes de confirmar pedidos.</p>
                   </div>
                   <Field label="Rating" name="rating" type="number" value={draft.rating} onChange={(value) => updateDraft("rating", Number(value))} />
-                  <Field label="Terminos URL" name="termsUrl" value={draft.termsUrl ?? ""} onChange={(value) => updateDraft("termsUrl", value)} />
+                  <Field label="Términos URL" name="termsUrl" value={draft.termsUrl ?? ""} onChange={(value) => updateDraft("termsUrl", value)} />
                 </section>
-              </div>
             </div>
 
             <div className="mt-4 flex justify-end border-t pt-4">

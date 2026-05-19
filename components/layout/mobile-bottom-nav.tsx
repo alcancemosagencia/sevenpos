@@ -34,7 +34,6 @@ function MobileBottomNavComponent({ user, business }: { user: SessionUser; busin
                 isActive ? "text-primary" : "text-muted-foreground",
               )}
             >
-              {isActive ? <span className="absolute inset-x-1 top-1 h-9 rounded-lg bg-accent" /> : null}
               <Icon className={cn("relative size-5", isActive ? "stroke-[2.5]" : "stroke-2")} />
               <span className="relative max-w-full truncate">{item.shortLabel ?? item.label}</span>
             </Link>

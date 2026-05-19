@@ -28,6 +28,7 @@ export type ReceiptData = {
   exchangeRate: number;
   subtotalUsd: number;
   taxUsd?: number;
+  tipUsd?: number;
   discountUsd?: number;
   totalUsd: number;
   totalBs: number;
