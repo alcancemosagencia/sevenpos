@@ -110,8 +110,22 @@ export function SettingsClient({
   const [pending, startTransition] = useTransition();
   const [securityOpen, setSecurityOpen] = useState(false);
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const currentPlanIndex = Math.max(0, plans.findIndex((plan) => plan.id === business.plan.id || plan.slug === business.plan.slug));
-  const upgradePlans = plans
+  const safePlans = Array.isArray(plans) ? plans : [];
+  const safeFeatures = Array.isArray(features) ? features : [];
+  const currentPlan = business?.plan ?? {
+    id: null,
+    name: "Sin plan",
+    slug: "",
+    priceMonthly: 0,
+    priceYearly: 0,
+    maxUsers: 0,
+    maxBranches: 0,
+    features: [],
+  };
+  const planFeatures = Array.isArray(currentPlan.features) ? currentPlan.features : [];
+  const counts = business?.counts ?? { users: 0, branches: 0, products: 0 };
+  const currentPlanIndex = Math.max(0, safePlans.findIndex((plan) => plan.id === currentPlan.id || plan.slug === currentPlan.slug));
+  const upgradePlans = safePlans
     .filter((plan) => plan.status === "ACTIVE")
     .filter((_, index) => index > currentPlanIndex)
     .slice(0, 2);
@@ -124,7 +138,7 @@ export function SettingsClient({
     { label: "Delivery", description: "Métodos, fee y horarios del menú público.", href: "/public-menu/settings", feature: "delivery", icon: CalendarClock },
     { label: "Horarios", description: "Disponibilidad pública por canal.", href: "/public-menu/settings", feature: "menú público", icon: CalendarClock },
     { label: "Sucursales", description: "Límites y operación multi-sucursal.", href: "/dashboard/branches", feature: "multi-sucursal", icon: Building2 },
-  ].filter((module) => featureListHas(features, module.feature));
+  ].filter((module) => featureListHas(safeFeatures, module.feature));
 
   function submitUpgrade(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -219,8 +233,8 @@ export function SettingsClient({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/55">Plan actual</p>
-                  <h2 className="mt-1.5 text-xl font-semibold tracking-tight">{business.plan.name}</h2>
-                  <p className="mt-1 text-sm text-white/65">{money(business.plan.priceMonthly)} / mes</p>
+                  <h2 className="mt-1.5 text-xl font-semibold tracking-tight">{currentPlan.name}</h2>
+                  <p className="mt-1 text-sm text-white/65">{money(currentPlan.priceMonthly)} / mes</p>
                 </div>
                 <span className="rounded-lg bg-white/10 px-2 py-1 text-xs font-medium">{statusLabel(business.subscriptionStatus)}</span>
               </div>
@@ -229,19 +243,19 @@ export function SettingsClient({
               <div className="grid grid-cols-3 gap-2 text-sm">
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Usuarios</p>
-                  <p className="mt-1 font-semibold text-slate-900">{business.counts.users}/{business.plan.maxUsers || "∞"}</p>
+                  <p className="mt-1 font-semibold text-slate-900">{counts.users}/{currentPlan.maxUsers || "sin límite"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Sucursales</p>
-                  <p className="mt-1 font-semibold text-slate-900">{business.counts.branches}/{business.plan.maxBranches || "∞"}</p>
+                  <p className="mt-1 font-semibold text-slate-900">{counts.branches}/{currentPlan.maxBranches || "sin límite"}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Productos</p>
-                  <p className="mt-1 font-semibold text-slate-900">{business.counts.products}</p>
+                  <p className="mt-1 font-semibold text-slate-900">{counts.products}</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {business.plan.features.slice(0, 12).map((feature) => (
+                {planFeatures.slice(0, 12).map((feature) => (
                   <span key={feature} className="rounded-lg bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
                     {featureLabel(feature)}
                   </span>
@@ -272,7 +286,8 @@ export function SettingsClient({
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {upgradePlans.map((plan) => {
-              const unlocked = plan.features.filter((feature) => !featureListHas(business.plan.features, feature));
+              const planUpgradeFeatures = Array.isArray(plan.features) ? plan.features : [];
+              const unlocked = planUpgradeFeatures.filter((feature) => !featureListHas(planFeatures, feature));
               return (
                 <form key={plan.id} onSubmit={submitUpgrade} className="rounded-lg border bg-card p-4">
                   <input type="hidden" name="planId" value={plan.id} />
@@ -404,3 +419,4 @@ export function SettingsClient({
     </section>
   );
 }
+

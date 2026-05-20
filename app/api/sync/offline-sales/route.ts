@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { checkoutAction } from "@/features/pos/actions";
+import { performCheckout } from "@/features/pos/checkout-service";
 import { requireTenantContext } from "@/lib/tenant";
 import type { PaymentMethod } from "@/features/pos/types";
 
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "Venta offline incompleta." }, { status: 400 });
     }
 
-    const result = await checkoutAction({
+    const result = await performCheckout({
       paymentMethod: payload.paymentMethod,
       currency: payload.currency,
       cashReceivedUsd: payload.cashReceivedUsd,

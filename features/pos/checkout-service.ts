@@ -1,6 +1,3 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
 import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
@@ -40,7 +37,7 @@ function acquireCheckoutLock(key: string) {
   return true;
 }
 
-export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResult> {
+export async function performCheckout(input: CheckoutInput): Promise<CheckoutResult> {
   try {
     const tenant = await requireTenantContext();
     const businessId = tenant.businessId;
@@ -106,7 +103,7 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
       });
 
       if (products.length !== productIds.length) {
-        throw new Error("Uno o mas productos no estan disponibles.");
+        throw new Error("Uno o más productos no están disponibles.");
       }
 
       if (input.preSaleId) {
@@ -116,7 +113,7 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
         });
 
         if (!preSale) {
-          throw new Error("La preventa ya no esta disponible.");
+          throw new Error("La preventa ya no está disponible.");
         }
       }
 
@@ -224,7 +221,7 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
             userId: tenant.currentUser.id,
             type: "SALE_STOCK_DECREMENT",
             afterValue: { quantity: item.quantity, saleId: createdSale.id },
-            note: "Descuento automatico por venta",
+            note: "Descuento automático por venta",
           },
           tx,
         );
@@ -286,11 +283,6 @@ export async function checkoutAction(input: CheckoutInput): Promise<CheckoutResu
 
       return createdSale;
     });
-
-    revalidatePath("/pos");
-    revalidatePath("/products");
-    revalidatePath("/dashboard");
-    revalidatePath("/pre-sales");
 
     return { ok: true, saleId: sale.id };
   } catch (error) {

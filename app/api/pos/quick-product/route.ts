@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
-import { createProductAction } from "@/features/products/actions";
+import { revalidatePath } from "next/cache";
+import { createProduct } from "@/features/products/create-product-service";
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const result = await createProductAction({}, formData);
+    const result = await createProduct(formData);
+    if (result.ok) {
+      revalidatePath("/products");
+      revalidatePath("/pos");
+    }
     return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (error) {
     return NextResponse.json(
