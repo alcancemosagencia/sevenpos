@@ -135,7 +135,7 @@ export function SettingsClient({
     { label: "Ticket e impresora", description: "Ticket 58/80mm, auto print y logo.", href: "/settings/ticket", feature: "tickets", icon: Receipt },
     { label: "Impuestos", description: "IVA y porcentajes operativos.", href: "/settings/taxes", feature: "ventas", icon: Landmark },
     { label: "Propinas", description: "Preparado para cobros con servicio.", href: null, feature: "ventas", icon: Sparkles },
-    { label: "Delivery", description: "Métodos, fee y horarios del menú público.", href: "/public-menu/settings", feature: "delivery", icon: CalendarClock },
+    { label: "Delivery", description: "Métodos, fee y horarios de la tienda online.", href: "/public-menu/settings", feature: "delivery", icon: CalendarClock },
     { label: "Horarios", description: "Disponibilidad pública por canal.", href: "/public-menu/settings", feature: "menú público", icon: CalendarClock },
     { label: "Sucursales", description: "Límites y operación multi-sucursal.", href: "/dashboard/branches", feature: "multi-sucursal", icon: Building2 },
   ].filter((module) => featureListHas(safeFeatures, module.feature));
@@ -216,7 +216,7 @@ export function SettingsClient({
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Logo</Label>
-                <Input value={business.logoUrl ?? "Configurable desde Menú público"} readOnly className="h-9 bg-muted" />
+                <Input value={business.logoUrl ?? "Configurable desde Tienda Online"} readOnly className="h-9 bg-muted" />
               </label>
               <label className="space-y-1.5">
                 <Label className="text-xs">Slug público</Label>

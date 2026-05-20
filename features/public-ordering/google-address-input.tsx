@@ -111,7 +111,7 @@ export function GoogleAddressInput({
         onChange={(event) => onChange({ address: event.target.value, lat: null, lng: null })}
         required={required}
         placeholder={placesReady ? "Busca tu dirección" : "Dirección de entrega"}
-        className="h-11 pl-9"
+        className="h-11 rounded-2xl border-white/10 bg-white/8 pl-9 text-white placeholder:text-white/35"
       />
     </div>
   );

@@ -33,14 +33,14 @@ export function paymentOptions(country: string | null) {
     return [
       { value: "cash", label: "Efectivo" },
       { value: "transfer", label: "Transferencia" },
-      { value: "debit", label: "Debito" },
-      { value: "credit", label: "Credito" },
+      { value: "debit", label: "Débito" },
+      { value: "credit", label: "Crédito" },
     ] as const;
   }
 
   return [
     { value: "cash", label: "Efectivo" },
-    { value: "mobile_payment", label: "Pago movil" },
+    { value: "mobile_payment", label: "Pago móvil" },
     { value: "zelle", label: "Zelle" },
     { value: "binance", label: "Binance" },
     { value: "transfer", label: "Transferencia" },

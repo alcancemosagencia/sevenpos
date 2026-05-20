@@ -22,7 +22,7 @@ import { requireTenantContext } from "@/lib/tenant";
 const paymentLabels = {
   CASH_USD: "Efectivo USD",
   CASH_BS: "Efectivo Bs",
-  MOBILE_PAYMENT: "Pago movil",
+  MOBILE_PAYMENT: "Pago móvil",
   BANK_TRANSFER: "Transferencia",
 };
 

@@ -102,7 +102,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     href: "/public-menu/settings",
-    label: "Menú público",
+    label: "Tienda Online",
     icon: Globe2,
     permission: "settings:access",
     group: "channels",

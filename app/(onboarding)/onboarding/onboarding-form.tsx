@@ -55,7 +55,7 @@ export function OnboardingForm({ defaultEmail }: { defaultEmail: string }) {
             <ChefHat className="mb-3 size-5" />
             <p className="font-semibold">Restaurante</p>
             <p className="mt-1 text-xs text-muted-foreground">Ventas de comida, delivery y mesas.</p>
-            <p className="mt-2 text-[11px] font-medium text-primary">Menú público · KDS · Mesas próximamente</p>
+            <p className="mt-2 text-[11px] font-medium text-primary">Tienda Online · KDS · Mesas próximamente</p>
           </button>
           <button
             type="button"

@@ -1,10 +1,17 @@
 import { notFound } from "next/navigation";
+import { Poppins } from "next/font/google";
 import { PublicMenuClient } from "@/features/public-ordering/public-menu-client";
 import type { PublicBusinessSettings } from "@/features/public-ordering/types";
 import { decimalToNumber } from "@/features/pos/format";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
 
 type PublicStorePageProps = {
   params: Promise<{ slug: string }>;
@@ -72,8 +79,9 @@ export default async function PublicStorePage({ params }: PublicStorePageProps) 
   const settings = business.publicSettings;
 
   return (
-    <PublicMenuClient
-      business={{
+    <div className={poppins.className}>
+      <PublicMenuClient
+        business={{
         id: business.id,
         slug: business.slug,
         name: business.name,
@@ -116,7 +124,8 @@ export default async function PublicStorePage({ params }: PublicStorePageProps) 
           price: decimalToNumber(product.priceUsd),
           stock: product.stock,
         })),
-      }}
-    />
+        }}
+      />
+    </div>
   );
 }

@@ -8,7 +8,7 @@
   "Ventas",
   "Gastos",
   "Reportes",
-  "Menú público",
+  "Tienda Online",
   "Ticket",
   "Sucursales",
   "Configuración",

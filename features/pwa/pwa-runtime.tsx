@@ -73,10 +73,25 @@ export function PwaRuntime() {
   useEffect(() => {
     void refreshPending();
 
+    let removeLoadListener: (() => void) | undefined;
+
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
-      });
+      const registerServiceWorker = () => {
+        void navigator.serviceWorker
+          .register("/sw.js", { scope: "/" })
+          .then((registration) => {
+            void registration.update();
+            registration.active?.postMessage({ type: "SEVENPOS_CLEAR_LEGACY_CACHES" });
+          })
+          .catch(() => undefined);
+      };
+
+      if (document.readyState === "complete") {
+        registerServiceWorker();
+      } else {
+        window.addEventListener("load", registerServiceWorker, { once: true });
+        removeLoadListener = () => window.removeEventListener("load", registerServiceWorker);
+      }
     }
 
     function handleOnline() {
@@ -91,6 +106,7 @@ export function PwaRuntime() {
     void syncQueue();
 
     return () => {
+      removeLoadListener?.();
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("sevenpos:offline-queue-changed", handleQueue);
     };
