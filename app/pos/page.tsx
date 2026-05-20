@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
+import { SubscriptionBlocked } from "@/features/billing/subscription-blocked";
+import { effectiveSubscriptionStatus, isSubscriptionBlocked } from "@/features/billing/utils";
 import { getOpenCashSessionSummary } from "@/features/cash/queries";
 import { ensureBranchInventoryFromProducts, getCurrentBranchForUser } from "@/features/branches/branch-context";
 import { getHardwareSettings } from "@/features/hardware/settings";
 import { decimalToNumber } from "@/features/pos/format";
 import { PosClient } from "@/features/pos/pos-client";
+import { can, defaultRedirectForRole } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 
@@ -17,6 +20,29 @@ export default async function PosPage() {
     redirect("/onboarding");
   }
 
+  if (tenant.isSuperAdmin) {
+    redirect("/admin");
+  }
+
+  if (!can(tenant.currentUser.role, "pos:access")) {
+    redirect(defaultRedirectForRole(tenant.currentUser.role));
+  }
+
+  const effectiveStatus = effectiveSubscriptionStatus({
+    status: tenant.currentBusiness.subscriptionStatus,
+    trialEnd: new Date(tenant.currentBusiness.trialEnd),
+    nextPaymentAt: tenant.currentBusiness.nextPaymentAt ? new Date(tenant.currentBusiness.nextPaymentAt) : null,
+  });
+
+  if (isSubscriptionBlocked(effectiveStatus)) {
+    return (
+      <SubscriptionBlocked
+        businessName={tenant.currentBusiness.name}
+        status={effectiveStatus}
+      />
+    );
+  }
+
   const branch = await getCurrentBranchForUser(tenant.businessId, tenant.currentUser.id);
   await ensureBranchInventoryFromProducts(tenant.businessId, branch.id);
 
@@ -25,10 +51,32 @@ export default async function PosPage() {
       businessId: tenant.businessId,
       isActive: true,
     },
-    include: {
-      category: true,
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      imageUrl: true,
+      categoryId: true,
+      priceUsd: true,
+      priceBs: true,
+      stock: true,
+      lowStockAlert: true,
+      sku: true,
+      barcode: true,
+      allowVariablePrice: true,
+      soldByWeight: true,
+      unit: true,
+      isPublic: true,
+      isActive: true,
+      category: {
+        select: { name: true },
+      },
       branchInventory: {
         where: { branchId: branch.id },
+        select: {
+          stock: true,
+          lowStockAlert: true,
+        },
         take: 1,
       },
     },
@@ -61,9 +109,22 @@ export default async function PosPage() {
       status: "OPEN",
       expiresAt: { gt: new Date() },
     },
-    include: {
-      createdBy: true,
-      items: true,
+    select: {
+      id: true,
+      code: true,
+      totalUsd: true,
+      createdBy: {
+        select: {
+          fullName: true,
+          email: true,
+        },
+      },
+      items: {
+        select: {
+          productId: true,
+          quantity: true,
+        },
+      },
     },
     orderBy: { createdAt: "desc" },
     take: 12,

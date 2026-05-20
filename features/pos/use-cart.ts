@@ -129,7 +129,7 @@ export function useCart(
     };
   }, [exchangeRate, items, options?.taxRate, options?.taxesEnabled, options?.tipMode, options?.tipRate, options?.tipsEnabled]);
 
-  return {
+  return useMemo(() => ({
     items,
     selectedProductId,
     setSelectedProductId,
@@ -140,5 +140,15 @@ export function useCart(
     decrementSelected,
     clearCart,
     ...totals,
-  };
+  }), [
+    addItem,
+    clearCart,
+    decrementSelected,
+    incrementSelected,
+    items,
+    removeItem,
+    selectedProductId,
+    totals,
+    updateQuantity,
+  ]);
 }
