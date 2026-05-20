@@ -7,6 +7,34 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+const reservedPublicSlugs = new Set([
+  "admin",
+  "api",
+  "auth",
+  "cash",
+  "customer-display",
+  "customers",
+  "dashboard",
+  "expenses",
+  "inventory",
+  "kds",
+  "login",
+  "more",
+  "onboarding",
+  "pos",
+  "pre-sales",
+  "products",
+  "public-menu",
+  "receipts",
+  "register",
+  "reports",
+  "settings",
+  "sign-in",
+  "sign-up",
+  "staff",
+  "transfers",
+]);
+
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -36,6 +64,11 @@ const defaultPublicSettings: PublicBusinessSettings = {
 
 export default async function PublicStorePage({ params }: PublicStorePageProps) {
   const { slug } = await params;
+  const normalizedSlug = decodeURIComponent(slug ?? "").toLowerCase();
+
+  if (reservedPublicSlugs.has(normalizedSlug) || normalizedSlug.startsWith("clerk_")) {
+    notFound();
+  }
 
   const business = await prisma.business.findUnique({
     where: { slug },

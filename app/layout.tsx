@@ -41,13 +41,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="es" suppressHydrationWarning>
-        <body suppressHydrationWarning className={`${inter.variable} font-sans`}>
+    <html lang="es" suppressHydrationWarning>
+      <body suppressHydrationWarning className={`${inter.variable} font-sans`}>
+        <ClerkProvider>
           {children}
           <PwaRuntime />
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }

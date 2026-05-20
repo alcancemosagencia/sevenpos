@@ -43,10 +43,21 @@ function isPublicStoreRoute(pathname: string) {
 
 export default clerkMiddleware(async (auth, request) => {
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-sevenpos-pathname", request.nextUrl.pathname);
+  const pathname = request.nextUrl.pathname;
+  requestHeaders.set("x-sevenpos-pathname", pathname);
 
-  if (!isPublicRoute(request) && !isPublicStoreRoute(request.nextUrl.pathname)) {
-    await auth.protect();
+  if (!isPublicRoute(request) && !isPublicStoreRoute(pathname)) {
+    const authObject = await auth();
+
+    if (!authObject.userId) {
+      if (pathname.startsWith("/api")) {
+        return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+      }
+
+      const signInUrl = new URL("/sign-in", request.url);
+      signInUrl.searchParams.set("redirect_url", `${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(signInUrl);
+    }
   }
 
   return NextResponse.next({

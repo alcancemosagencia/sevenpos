@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { SevenPosLogo } from "@/components/brand/sevenpos-logo";
+import { getCurrentBranchForUser } from "@/features/branches/branch-context";
 import { CashOpenForm } from "@/features/cash/cash-open-form";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
@@ -11,8 +12,9 @@ export default async function CashOpenPage() {
     redirect("/onboarding");
   }
 
+  const branch = await getCurrentBranchForUser(tenant.businessId, tenant.currentUser.id);
   const openSession = await prisma.cashSession.findFirst({
-    where: { businessId: tenant.businessId, status: "OPEN" },
+    where: { businessId: tenant.businessId, branchId: branch.id, status: "OPEN" },
     select: { id: true },
   });
 
