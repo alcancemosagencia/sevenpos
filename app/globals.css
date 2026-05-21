@@ -104,6 +104,46 @@
   }
 }
 
+@layer components {
+  .public-store {
+    --public-bg: #090a0c;
+    --public-surface: #0f1115;
+    --public-surface-raised: #15171d;
+    --public-border: #2a2d36;
+    --public-input-border: #23262f;
+    --public-muted: #7c8190;
+    --public-focus: #3b82f6;
+    --public-radius: 7px;
+  }
+
+  .public-store input:not([type="checkbox"]),
+  .public-store textarea,
+  .public-store select {
+    background: var(--public-surface) !important;
+    border-color: var(--public-input-border) !important;
+    border-radius: 6px !important;
+    color: #fff !important;
+  }
+
+  .public-store input::placeholder,
+  .public-store textarea::placeholder {
+    color: var(--public-muted) !important;
+  }
+
+  .public-store input:focus,
+  .public-store textarea:focus,
+  .public-store select:focus {
+    border-color: var(--public-focus) !important;
+    box-shadow: 0 0 0 2px rgb(59 130 246 / 0.18) !important;
+  }
+
+  .public-store-card {
+    border: 1px solid var(--public-border);
+    border-radius: var(--public-radius);
+    background: var(--public-surface-raised);
+  }
+}
+
 .receipt-print-area {
   display: none;
 }

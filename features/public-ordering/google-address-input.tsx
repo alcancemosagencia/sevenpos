@@ -104,14 +104,14 @@ export function GoogleAddressInput({
 
   return (
     <div className="relative">
-      <MapPin className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <MapPin className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#7C8190]" />
       <Input
         ref={inputRef}
         value={value.address}
         onChange={(event) => onChange({ address: event.target.value, lat: null, lng: null })}
         required={required}
         placeholder={placesReady ? "Busca tu dirección" : "Dirección de entrega"}
-        className="h-11 rounded-2xl border-white/10 bg-white/8 pl-9 text-white placeholder:text-white/35"
+        className="h-11 border-[#23262F] bg-[#0F1115] pl-9 text-white placeholder:text-[#7C8190] focus-visible:border-[#3B82F6] focus-visible:ring-[#3B82F6]/20"
       />
     </div>
   );

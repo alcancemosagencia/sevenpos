@@ -1,4 +1,5 @@
 import { can } from "@/lib/rbac";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import type { PaymentMethod } from "@/features/pos/types";
@@ -58,25 +59,131 @@ export async function performCheckout(input: CheckoutInput): Promise<CheckoutRes
       return { ok: false, error: "Venta en proceso. Espera un momento." };
     }
 
-    const sale = await prisma.$transaction(async (tx) => {
-      const branch = await getCurrentBranchForUser(businessId, tenant.currentUser.id);
-      const business = await tx.business.findUnique({
-        where: { id: businessId },
-        select: { exchangeRate: true },
-      });
-      const exchangeRate = Math.max(0.0001, Number(business?.exchangeRate.toString() ?? "1"));
-      const taxSettings = await tx.businessTaxSettings.findUnique({
-        where: { businessId },
-        select: {
-          taxesEnabled: true,
-          ivaRate: true,
-          customTaxRate: true,
-          tipsEnabled: true,
-          tipRate: true,
-          tipMode: true,
-        },
+    const branch = await getCurrentBranchForUser(businessId, tenant.currentUser.id);
+    const exchangeRate = Math.max(0.0001, Number(tenant.currentBusiness?.exchangeRate?.toString() ?? "1"));
+    const requestedItems = Array.from(
+      input.items
+        .reduce((items, item) => {
+          const rawQuantity = Number(item.quantity);
+          const quantity = Math.max(0.001, Number.isFinite(rawQuantity) ? rawQuantity : 1);
+          items.set(item.productId, (items.get(item.productId) ?? 0) + quantity);
+          return items;
+        }, new Map<string, number>())
+        .entries(),
+    ).map(([productId, quantity]) => ({ productId, quantity }));
+    const productIds = requestedItems.map((item) => item.productId);
+
+    const taxSettings = await prisma.businessTaxSettings.findUnique({
+      where: { businessId },
+      select: {
+        taxesEnabled: true,
+        ivaRate: true,
+        customTaxRate: true,
+        tipsEnabled: true,
+        tipRate: true,
+        tipMode: true,
+      },
+    });
+
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        businessId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        priceUsd: true,
+        stock: true,
+        lowStockAlert: true,
+      },
+    });
+
+    if (products.length !== productIds.length) {
+      throw new Error("Uno o más productos no están disponibles.");
+    }
+
+    const inventories = await prisma.branchInventory.findMany({
+      where: {
+        businessId,
+        branchId: branch.id,
+        productId: { in: productIds },
+      },
+      select: {
+        productId: true,
+        stock: true,
+      },
+    });
+
+    const inventoryByProductId = new Map(
+      inventories.map((inventory) => [inventory.productId, Number(inventory.stock.toString())]),
+    );
+    const missingInventoryProducts = products.filter((product) => !inventoryByProductId.has(product.id));
+
+    if (missingInventoryProducts.length > 0) {
+      await prisma.branchInventory.createMany({
+        data: missingInventoryProducts.map((product) => ({
+          businessId,
+          branchId: branch.id,
+          productId: product.id,
+          stock: product.stock.toString(),
+          lowStockAlert: product.lowStockAlert.toString(),
+        })),
+        skipDuplicates: true,
       });
 
+      for (const product of missingInventoryProducts) {
+        inventoryByProductId.set(product.id, product.stock);
+      }
+    }
+
+    const lineItems = requestedItems.map((item) => {
+      const product = products.find((candidate) => candidate.id === item.productId);
+
+      if (!product) {
+        throw new Error("Producto no encontrado.");
+      }
+
+      const branchStock = inventoryByProductId.get(product.id) ?? product.stock;
+
+      if (branchStock < item.quantity) {
+        throw new Error(`Stock insuficiente para ${product.name}.`);
+      }
+
+      const unitPrice = input.currency === "BS" ? product.priceUsd.mul(exchangeRate.toString()) : product.priceUsd;
+      const subtotal = unitPrice.mul(item.quantity.toString());
+
+      return {
+        product,
+        quantity: item.quantity,
+        quantityInt: Math.max(1, Math.ceil(item.quantity)),
+        unitPrice,
+        subtotal,
+      };
+    });
+
+    const subtotal = lineItems.reduce((sum, item) => sum.add(item.subtotal), lineItems[0].subtotal.mul(0));
+    const taxRate = taxSettings?.taxesEnabled
+      ? Number(taxSettings.ivaRate.toString()) + Number(taxSettings.customTaxRate.toString())
+      : 0;
+    const tipRate = taxSettings?.tipsEnabled && taxSettings.tipMode === "AUTO" ? Number(taxSettings.tipRate.toString()) : 0;
+    const taxTotal = subtotal.mul(taxRate.toString()).div(100);
+    const tipTotal = subtotal.mul(tipRate.toString()).div(100);
+    const total = subtotal.add(taxTotal).add(tipTotal);
+    const totalNumber = Number(total.toString());
+    const totalUsd = input.currency === "BS" ? totalNumber / exchangeRate : totalNumber;
+    const receivedUsd = Math.max(0, input.cashReceivedUsd ?? 0);
+    const receivedBs = Math.max(0, input.cashReceivedBs ?? 0);
+
+    if (receivedUsd > 0 || receivedBs > 0) {
+      const paidAsUsd = receivedUsd + receivedBs / exchangeRate;
+      if (paidAsUsd + 0.01 < totalUsd) {
+        throw new Error("El pago no cubre el total de la venta.");
+      }
+    }
+
+    const sale = await prisma.$transaction(async (tx) => {
       const cashSession = await tx.cashSession.findFirst({
         where: { businessId, branchId: branch.id, status: "OPEN" },
         select: { id: true },
@@ -86,83 +193,34 @@ export async function performCheckout(input: CheckoutInput): Promise<CheckoutRes
         throw new Error("Debes abrir caja antes de vender.");
       }
 
-      const productIds = input.items.map((item) => item.productId);
-      const products = await tx.product.findMany({
-        where: {
-          id: { in: productIds },
-          businessId,
-          isActive: true,
-        },
-      });
-      const inventories = await tx.branchInventory.findMany({
-        where: {
-          businessId,
-          branchId: branch.id,
-          productId: { in: productIds },
-        },
-      });
-
-      if (products.length !== productIds.length) {
-        throw new Error("Uno o más productos no están disponibles.");
-      }
-
       if (input.preSaleId) {
-        const preSale = await tx.preSale.findFirst({
+        const preSaleUpdate = await tx.preSale.updateMany({
           where: { id: input.preSaleId, businessId, branchId: branch.id, status: "OPEN" },
-          select: { id: true },
+          data: { status: "PAID" },
         });
 
-        if (!preSale) {
+        if (preSaleUpdate.count !== 1) {
           throw new Error("La preventa ya no está disponible.");
         }
       }
 
-      const lineItems = input.items.map((item) => {
-        const product = products.find((candidate) => candidate.id === item.productId);
+      for (const item of lineItems) {
+        const stockUpdate = await tx.branchInventory.updateMany({
+          where: {
+            businessId,
+            branchId: branch.id,
+            productId: item.product.id,
+            stock: { gte: item.quantity.toString() },
+          },
+          data: {
+            stock: {
+              decrement: item.quantity.toString(),
+            },
+          },
+        });
 
-        if (!product) {
-          throw new Error("Producto no encontrado.");
-        }
-
-        const rawQuantity = Number(item.quantity);
-        const quantity = Math.max(0.001, Number.isFinite(rawQuantity) ? rawQuantity : 1);
-
-        const inventory = inventories.find((candidate) => candidate.productId === product.id);
-        const branchStock = inventory ? Number(inventory.stock.toString()) : product.stock;
-
-        if (branchStock < quantity) {
-          throw new Error(`Stock insuficiente para ${product.name}.`);
-        }
-
-        const unitPrice = input.currency === "BS" ? product.priceUsd.mul(exchangeRate.toString()) : product.priceUsd;
-        const subtotal = unitPrice.mul(quantity.toString());
-
-        return {
-          product,
-          quantity,
-          quantityInt: Math.max(1, Math.ceil(quantity)),
-          unitPrice,
-          subtotal,
-        };
-      });
-
-      const subtotal = lineItems.reduce((sum, item) => sum.add(item.subtotal), lineItems[0].subtotal.mul(0));
-      const taxRate = taxSettings?.taxesEnabled
-        ? Number(taxSettings.ivaRate.toString()) + Number(taxSettings.customTaxRate.toString())
-        : 0;
-      const tipRate = taxSettings?.tipsEnabled && taxSettings.tipMode === "AUTO" ? Number(taxSettings.tipRate.toString()) : 0;
-      const taxTotal = subtotal.mul(taxRate.toString()).div(100);
-      const tipTotal = subtotal.mul(tipRate.toString()).div(100);
-      const total = subtotal.add(taxTotal).add(tipTotal);
-      const totalNumber = Number(total.toString());
-      const totalUsd = input.currency === "BS" ? totalNumber / exchangeRate : totalNumber;
-      const receivedUsd = Math.max(0, input.cashReceivedUsd ?? 0);
-      const receivedBs = Math.max(0, input.cashReceivedBs ?? 0);
-
-      if (receivedUsd > 0 || receivedBs > 0) {
-        const paidAsUsd = receivedUsd + receivedBs / exchangeRate;
-        if (paidAsUsd + 0.01 < totalUsd) {
-          throw new Error("El pago no cubre el total de la venta.");
+        if (stockUpdate.count !== 1) {
+          throw new Error(`Stock insuficiente para ${item.product.name}.`);
         }
       }
 
@@ -188,44 +246,6 @@ export async function performCheckout(input: CheckoutInput): Promise<CheckoutRes
           },
         },
       });
-
-      for (const item of lineItems) {
-        await tx.branchInventory.upsert({
-          where: {
-            branchId_productId: {
-              branchId: branch.id,
-              productId: item.product.id,
-            },
-          },
-          create: {
-            businessId,
-            branchId: branch.id,
-            productId: item.product.id,
-            stock: Math.max(0, item.product.stock - item.quantity).toString(),
-            lowStockAlert: item.product.lowStockAlert.toString(),
-          },
-          update: {
-            stock: {
-              decrement: item.quantity.toString(),
-            },
-          },
-        });
-      }
-
-      for (const item of lineItems) {
-        await writeProductHistory(
-          {
-            businessId,
-            branchId: branch.id,
-            productId: item.product.id,
-            userId: tenant.currentUser.id,
-            type: "SALE_STOCK_DECREMENT",
-            afterValue: { quantity: item.quantity, saleId: createdSale.id },
-            note: "Descuento automático por venta",
-          },
-          tx,
-        );
-      }
 
       if (input.paymentMethod === "CASH_USD" || input.paymentMethod === "CASH_BS") {
         const cashAmountUsd =
@@ -255,34 +275,44 @@ export async function performCheckout(input: CheckoutInput): Promise<CheckoutRes
         });
       }
 
-      if (input.preSaleId) {
-        await tx.preSale.update({
-          where: { id: input.preSaleId },
-          data: { status: "PAID" },
-        });
-      }
+      return createdSale;
+    });
 
-      await writeAuditLog(
-        {
+    try {
+      await Promise.all([
+        writeAuditLog({
           businessId,
           branchId: branch.id,
           userId: tenant.currentUser.id,
           action: "SALE_CREATED",
           module: "POS",
           metadata: {
-            saleId: createdSale.id,
+            saleId: sale.id,
             total: totalNumber,
             taxTotal: Number(taxTotal.toString()),
             tipTotal: Number(tipTotal.toString()),
             paymentMethod: input.paymentMethod,
             preSaleId: input.preSaleId ?? null,
           },
-        },
-        tx,
-      );
-
-      return createdSale;
-    });
+        }),
+        ...lineItems.map((item) =>
+          writeProductHistory({
+            businessId,
+            branchId: branch.id,
+            productId: item.product.id,
+            userId: tenant.currentUser.id,
+            type: "SALE_STOCK_DECREMENT",
+            afterValue: { quantity: item.quantity, saleId: sale.id },
+            note: "Descuento automático por venta",
+          }),
+        ),
+      ]);
+    } catch (auditError) {
+      logger.warn("La venta se registró, pero falló el registro secundario de auditoría.", {
+        saleId: sale.id,
+        error: auditError instanceof Error ? auditError.message : String(auditError),
+      });
+    }
 
     return { ok: true, saleId: sale.id };
   } catch (error) {
