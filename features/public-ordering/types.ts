@@ -61,3 +61,9 @@ export type PublicPaymentMethod =
   | "binance"
   | "debit"
   | "credit";
+
+export type PublicStoreMode = "ecommerce" | "menu_only";
+
+export function resolvePublicStoreMode(settings: PublicBusinessSettings): PublicStoreMode {
+  return settings.deliveryEnabled || settings.pickupEnabled ? "ecommerce" : "menu_only";
+}

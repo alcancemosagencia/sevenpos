@@ -21,6 +21,7 @@ const reservedPublicSlugs = new Set([
   "login",
   "more",
   "onboarding",
+  "orders",
   "pos",
   "pre-sales",
   "products",

@@ -2,8 +2,10 @@ import { randomUUID } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { NextResponse } from "next/server";
-import { imageExtensionForType, imageLimitBytes, isAllowedImageType, type ImageUploadKind } from "@/lib/image-upload";
+import { imageExtensionForType, imageLimitBytes, imageUploadLimitsMb, isAllowedImageType, type ImageUploadKind } from "@/lib/image-upload";
+import { getBusinessCoverPath, getBusinessLogoPath, getGenericBusinessImagePath, getProductImagePath, localUploadFolderForObjectPath, localUploadUrlForObjectPath } from "@/lib/storage-paths";
 import { requireTenantContext } from "@/lib/tenant";
+import { assertTenantBusinessId } from "@/lib/tenant-guards";
 
 const validKinds = new Set<ImageUploadKind>(["product", "logo", "cover", "generic"]);
 
@@ -31,16 +33,25 @@ async function uploadToSupabaseStorage(file: File, objectPath: string) {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "No pudimos subir la imagen a Supabase Storage.");
+    throw new Error("No se pudo subir la imagen");
   }
 
   return `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${objectPath}`;
 }
 
+function storagePathForKind(kind: ImageUploadKind, businessId: string, fileName: string) {
+  if (kind === "product") return getProductImagePath(businessId, fileName);
+  if (kind === "logo") return getBusinessLogoPath(businessId, fileName);
+  if (kind === "cover") return getBusinessCoverPath(businessId, fileName);
+  return getGenericBusinessImagePath(businessId, fileName);
+}
+
 export async function POST(request: Request) {
   const tenant = await requireTenantContext();
-  if (!tenant.businessId) {
+  let businessId: string;
+  try {
+    businessId = assertTenantBusinessId(tenant);
+  } catch {
     return NextResponse.json({ error: "Negocio no disponible." }, { status: 403 });
   }
 
@@ -53,17 +64,23 @@ export async function POST(request: Request) {
   }
 
   if (!isAllowedImageType(file.type)) {
-    return NextResponse.json({ error: "Formato no permitido. Usa PNG, JPG o WEBP." }, { status: 400 });
+    return NextResponse.json({ error: "Formato no permitido" }, { status: 400 });
   }
 
   if (file.size > imageLimitBytes(kind)) {
-    return NextResponse.json({ error: `La imagen supera el limite de ${imageLimitBytes(kind) / 1024 / 1024}MB.` }, { status: 400 });
+    return NextResponse.json({ error: `La imagen excede el tamaño permitido de ${imageUploadLimitsMb[kind]}MB` }, { status: 400 });
   }
 
   const extension = imageExtensionForType(file.type);
   const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
-  const storagePath = `${tenant.businessId}/${kind}/${fileName}`;
-  const supabaseUrl = await uploadToSupabaseStorage(file, storagePath);
+  const storagePath = storagePathForKind(kind, businessId, fileName);
+  let supabaseUrl: string | null = null;
+
+  try {
+    supabaseUrl = await uploadToSupabaseStorage(file, storagePath);
+  } catch {
+    return NextResponse.json({ error: "No se pudo subir la imagen" }, { status: 500 });
+  }
 
   if (supabaseUrl) {
     return NextResponse.json({
@@ -79,14 +96,14 @@ export async function POST(request: Request) {
     );
   }
 
-  const folder = path.join(process.cwd(), "public", "uploads", tenant.businessId, kind);
+  const folder = localUploadFolderForObjectPath(storagePath);
   await fs.mkdir(folder, { recursive: true });
 
   const absolutePath = path.join(folder, fileName);
   await fs.writeFile(absolutePath, Buffer.from(await file.arrayBuffer()));
 
   return NextResponse.json({
-    url: `/uploads/${tenant.businessId}/${kind}/${fileName}`,
+    url: localUploadUrlForObjectPath(storagePath),
     path: storagePath,
   });
 }

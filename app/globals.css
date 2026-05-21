@@ -106,23 +106,57 @@
 
 @layer components {
   .public-store {
-    --public-bg: #090a0c;
-    --public-surface: #0f1115;
-    --public-surface-raised: #15171d;
-    --public-border: #2a2d36;
-    --public-input-border: #23262f;
-    --public-muted: #7c8190;
+    --public-bg: #0b0d11;
+    --public-shell: #101217;
+    --public-card: #16181f;
+    --public-card-soft: #111318;
+    --public-elevated: #1a1d25;
+    --public-border: #252934;
+    --public-border-soft: #1d2028;
+    --public-input-bg: #101217;
+    --public-input-border: #242834;
+    --public-text: #ffffff;
+    --public-text-strong: #ffffff;
+    --public-text-inverse: #0f172a;
+    --public-muted: #8a90a0;
+    --public-muted-soft: rgb(255 255 255 / 0.48);
+    --public-chip: #141720;
+    --public-chip-active: #ffffff;
+    --public-accent: #ffffff;
     --public-focus: #3b82f6;
-    --public-radius: 7px;
+    --public-radius: 6px;
+    --public-shadow: 0 18px 54px rgb(0 0 0 / 0.24);
+  }
+
+  .public-store[data-store-theme="light"] {
+    --public-bg: #f5f7fa;
+    --public-shell: #f8fafc;
+    --public-card: #ffffff;
+    --public-card-soft: #ffffff;
+    --public-elevated: #ffffff;
+    --public-border: #e3e7ee;
+    --public-border-soft: #edf0f5;
+    --public-input-bg: #ffffff;
+    --public-input-border: #dce2ea;
+    --public-text: #111827;
+    --public-text-strong: #020617;
+    --public-text-inverse: #ffffff;
+    --public-muted: #6b7280;
+    --public-muted-soft: rgb(15 23 42 / 0.55);
+    --public-chip: #ffffff;
+    --public-chip-active: #111827;
+    --public-accent: #111827;
+    --public-focus: #3b82f6;
+    --public-shadow: 0 16px 44px rgb(15 23 42 / 0.08);
   }
 
   .public-store input:not([type="checkbox"]),
   .public-store textarea,
   .public-store select {
-    background: var(--public-surface) !important;
+    background: var(--public-input-bg) !important;
     border-color: var(--public-input-border) !important;
-    border-radius: 6px !important;
-    color: #fff !important;
+    border-radius: var(--public-radius) !important;
+    color: var(--public-text) !important;
   }
 
   .public-store input::placeholder,
@@ -138,9 +172,9 @@
   }
 
   .public-store-card {
-    border: 1px solid var(--public-border);
     border-radius: var(--public-radius);
-    background: var(--public-surface-raised);
+    background: var(--public-card);
+    box-shadow: var(--public-shadow);
   }
 }
 

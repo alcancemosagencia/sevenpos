@@ -35,8 +35,8 @@ export async function createTransferAction(formData: FormData) {
   const fromBranch = await prisma.branch.findFirst({ where: { id: fromBranchId, businessId }, select: { id: true } });
   const toBranch = await prisma.branch.findFirst({ where: { id: toBranchId, businessId }, select: { id: true } });
   const product = await prisma.product.findFirst({ where: { id: productId, businessId }, select: { id: true } });
-  const inventory = await prisma.branchInventory.findUnique({
-    where: { branchId_productId: { branchId: fromBranchId, productId } },
+  const inventory = await prisma.branchInventory.findFirst({
+    where: { businessId, branchId: fromBranchId, productId },
     select: { stock: true },
   });
 
@@ -96,8 +96,8 @@ export async function updateTransferStatusAction(formData: FormData) {
       }
 
       for (const item of transfer.items) {
-        const source = await tx.branchInventory.findUnique({
-          where: { branchId_productId: { branchId: fromBranchId, productId: item.productId } },
+        const source = await tx.branchInventory.findFirst({
+          where: { businessId, branchId: fromBranchId, productId: item.productId },
           select: { stock: true },
         });
         if (Number(source?.stock.toString() ?? "0") < Number(item.quantity.toString())) {

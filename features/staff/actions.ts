@@ -159,9 +159,10 @@ export async function removeUserAccessRoleAction(formData: FormData) {
   if (!userId || !roleId) return;
 
   const role = await prisma.accessRole.findFirst({ where: { id: roleId, businessId: tenant.businessId }, select: { id: true } });
-  if (!role) return;
+  const user = await prisma.user.findFirst({ where: { id: userId, businessId: tenant.businessId }, select: { id: true } });
+  if (!role || !user) return;
 
-  await prisma.userAccessRole.deleteMany({ where: { userId, roleId } });
+  await prisma.userAccessRole.deleteMany({ where: { userId: user.id, roleId } });
   staffRevalidate();
 }
 
@@ -238,7 +239,7 @@ export async function setStaffUserStatusAction(formData: FormData) {
   if (!user) return { ok: false, error: "Usuario no encontrado." };
   if (user.role === "OWNER") return { ok: false, error: "No puedes suspender al dueño principal." };
 
-  await prisma.user.update({ where: { id: user.id }, data: { isActive } });
+  await prisma.user.updateMany({ where: { id: user.id, businessId: tenant.businessId }, data: { isActive } });
   staffRevalidate();
   return { ok: true, message: isActive ? "Usuario activado" : "Usuario suspendido" };
 }
@@ -253,7 +254,7 @@ export async function deleteStaffUserAction(formData: FormData) {
   if (!user) return { ok: false, error: "Usuario no encontrado." };
   if (user.role === "OWNER") return { ok: false, error: "No puedes eliminar al dueño principal." };
 
-  await prisma.user.delete({ where: { id: user.id } });
+  await prisma.user.deleteMany({ where: { id: user.id, businessId: tenant.businessId } });
   staffRevalidate();
   return { ok: true, message: "Usuario eliminado" };
 }

@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isBusinessOpen, publicCurrency } from "@/features/public-ordering/format";
 import type { FulfillmentMethod } from "@/features/public-ordering/types";
+import type { PaymentMethod } from "@prisma/client";
 
 type PublicOrderInput = {
-  businessId: string;
   businessSlug: string;
   fulfillmentMethod: FulfillmentMethod;
   customerName: string;
@@ -27,8 +27,27 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
   if (input.items.length === 0) return { ok: false, error: "Agrega productos al carrito." };
 
   const business = await prisma.business.findUnique({
-    where: { id: input.businessId, slug: input.businessSlug },
-    include: { publicSettings: true },
+    where: { slug: input.businessSlug },
+    select: {
+      id: true,
+      slug: true,
+      status: true,
+      country: true,
+      currency: true,
+      publicSettings: true,
+      branches: {
+        where: { isActive: true },
+        orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
+        select: { id: true },
+        take: 1,
+      },
+      users: {
+        where: { isActive: true, role: { in: ["OWNER", "ADMIN", "MANAGER", "CASHIER"] } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+        take: 1,
+      },
+    },
   });
 
   if (!business || business.status !== "ACTIVE") return { ok: false, error: "Este negocio no está disponible." };
@@ -56,9 +75,27 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
   if (!methodAllowed) return { ok: false, error: "Método de entrega no disponible." };
   if (input.fulfillmentMethod === "DELIVERY" && !input.address?.trim()) return { ok: false, error: "Agrega una dirección de entrega." };
 
+  const branch = business.branches[0] ?? null;
+  const operator = business.users[0] ?? null;
+  if (!operator) return { ok: false, error: "El negocio no tiene un operador activo para registrar ventas online." };
+
+  const salePaymentMethod: PaymentMethod =
+    input.paymentMethod === "cash"
+      ? "CASH_USD"
+      : input.paymentMethod === "mobile_payment"
+        ? "MOBILE_PAYMENT"
+        : "BANK_TRANSFER";
+
   const order = await prisma.$transaction(async (tx) => {
     const products = await tx.product.findMany({
       where: { businessId: business.id, id: { in: input.items.map((item) => item.productId) }, isActive: true, isPublic: true },
+      select: {
+        id: true,
+        name: true,
+        priceUsd: true,
+        stock: true,
+        lowStockAlert: true,
+      },
     });
 
     if (products.length !== input.items.length) throw new Error("Uno o más productos no están disponibles.");
@@ -84,9 +121,105 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
     const count = await tx.publicOrder.count({ where: { businessId: business.id } });
     const code = `W${String(count + 1).padStart(4, "0")}`;
 
+    if (branch) {
+      const existingInventory = await tx.branchInventory.findMany({
+        where: {
+          businessId: business.id,
+          branchId: branch.id,
+          productId: { in: lines.map((line) => line.product.id) },
+        },
+        select: { productId: true },
+      });
+      const existingInventoryIds = new Set(existingInventory.map((item) => item.productId));
+      const missingInventory = lines.filter((line) => !existingInventoryIds.has(line.product.id));
+
+      if (missingInventory.length > 0) {
+        await tx.branchInventory.createMany({
+          data: missingInventory.map((line) => ({
+            businessId: business.id,
+            branchId: branch.id,
+            productId: line.product.id,
+            stock: line.product.stock.toString(),
+            lowStockAlert: line.product.lowStockAlert.toString(),
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    for (const line of lines) {
+      const productUpdate = await tx.product.updateMany({
+        where: { id: line.product.id, businessId: business.id, stock: { gte: line.quantity } },
+        data: { stock: { decrement: line.quantity } },
+      });
+
+      if (productUpdate.count !== 1) throw new Error(`Stock insuficiente para ${line.product.name}.`);
+
+      if (branch) {
+        const inventoryUpdate = await tx.branchInventory.updateMany({
+          where: {
+            businessId: business.id,
+            branchId: branch.id,
+            productId: line.product.id,
+            stock: { gte: line.quantity.toString() },
+          },
+          data: { stock: { decrement: line.quantity.toString() } },
+        });
+
+        if (inventoryUpdate.count !== 1) throw new Error(`Stock insuficiente para ${line.product.name}.`);
+      }
+    }
+
+    const sale = await tx.sale.create({
+      data: {
+        businessId: business.id,
+        branchId: branch?.id ?? null,
+        subtotal: subtotal.toFixed(2),
+        taxTotal: tax.toFixed(2),
+        tipTotal: "0",
+        total: total.toFixed(2),
+        currency: "USD",
+        paymentMethod: salePaymentMethod,
+        cashierId: operator.id,
+        items: {
+          create: lines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.quantity,
+            quantityDecimal: line.quantity.toString(),
+            unitPrice: line.unitPrice.toFixed(2),
+            subtotal: line.subtotal.toFixed(2),
+          })),
+        },
+      },
+    });
+
+    const openCashSession = branch
+      ? await tx.cashSession.findFirst({
+          where: { businessId: business.id, branchId: branch.id, status: "OPEN" },
+          select: { id: true },
+        })
+      : null;
+
+    if (openCashSession && salePaymentMethod === "CASH_USD") {
+      await tx.cashMovement.create({
+        data: {
+          businessId: business.id,
+          branchId: branch?.id ?? null,
+          cashSessionId: openCashSession.id,
+          type: "SALE",
+          amountUsd: total.toFixed(2),
+          amountBs: "0",
+          note: `Pedido online ${code}`,
+          createdById: operator.id,
+        },
+      });
+    }
+
     return tx.publicOrder.create({
       data: {
         businessId: business.id,
+        branchId: branch?.id ?? null,
+        saleId: sale.id,
         code,
         fulfillmentMethod: input.fulfillmentMethod,
         customerName: input.customerName.trim(),
@@ -116,5 +249,8 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
   });
 
   revalidatePath(`/${business.slug}`);
-  return { ok: true, code: order.code };
+  revalidatePath("/orders");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports");
+  return { ok: true, id: order.id, code: order.code, status: order.status, createdAt: order.createdAt.toISOString() };
 }

@@ -1,0 +1,37 @@
+-- SevenPOS storage hardening notes for a future Supabase Storage policy pass.
+-- Current MVP uploads use a server-side service role API route and never trust
+-- businessId from the browser. Object paths are tenant-scoped:
+--   products/{businessId}/{uuid-file}
+--   businesses/{businessId}/logo/{uuid-file}
+--   businesses/{businessId}/cover/{uuid-file}
+--
+-- When tenant claims are available in Supabase JWT metadata, replace the
+-- placeholder claim key below with the canonical business id claim.
+
+-- Example read policy for a public bucket:
+-- CREATE POLICY "SevenPOS public read"
+-- ON storage.objects FOR SELECT
+-- USING (bucket_id = 'sevenpos-uploads');
+--
+-- If product images are moved to a dedicated Supabase bucket, use:
+-- USING (bucket_id = 'products');
+
+-- Example tenant write policy for authenticated clients if direct uploads are enabled later:
+-- CREATE POLICY "SevenPOS tenant scoped uploads"
+-- ON storage.objects FOR INSERT
+-- WITH CHECK (
+--   bucket_id = 'sevenpos-uploads'
+--   AND (
+--     (storage.foldername(name))[1] = 'products'
+--     AND (storage.foldername(name))[2] = (auth.jwt() -> 'app_metadata' ->> 'businessId')
+--   OR
+--     (storage.foldername(name))[1] = 'businesses'
+--     AND (storage.foldername(name))[2] = (auth.jwt() -> 'app_metadata' ->> 'businessId')
+--   )
+-- );
+--
+-- Dedicated products bucket variant:
+-- WITH CHECK (
+--   bucket_id = 'products'
+--   AND (storage.foldername(name))[1] = (auth.jwt() -> 'app_metadata' ->> 'businessId')
+-- );

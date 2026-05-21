@@ -3,6 +3,7 @@
   ArrowLeftRight,
   BarChart3,
   Building2,
+  ClipboardList,
   Globe2,
   LayoutDashboard,
   MoreHorizontal,
@@ -99,6 +100,14 @@ export const navigationItems: NavigationItem[] = [
     icon: Wallet,
     permission: "expenses:view",
     group: "operation",
+  },
+  {
+    href: "/orders",
+    label: "Pedidos",
+    icon: ClipboardList,
+    permission: "sales:view",
+    group: "operation",
+    feature: "menú público",
   },
   {
     href: "/public-menu/settings",

@@ -115,6 +115,7 @@ enum PublicOrderStatus {
   CONFIRMED
   PREPARING
   READY
+  OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED
 }
@@ -216,6 +217,8 @@ model PublicOrder {
   id                String            @id @default(cuid())
   businessId        String
   business          Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branchId          String?
+  saleId            String?
   code              String
   status            PublicOrderStatus @default(NEW)
   fulfillmentMethod FulfillmentMethod
@@ -239,6 +242,8 @@ model PublicOrder {
   @@unique([businessId, code])
   @@index([businessId, createdAt])
   @@index([businessId, status])
+  @@index([businessId, branchId])
+  @@index([saleId])
 }
 
 model PublicOrderItem {
