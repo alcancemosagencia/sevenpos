@@ -120,6 +120,22 @@ enum PublicOrderStatus {
   CANCELLED
 }
 
+enum PublicPaymentStatus {
+  PENDING
+  CONFIRMED
+  AWAITING_PAYMENT
+}
+
+enum BusinessPaymentMethodType {
+  CASH
+  MOBILE_PAYMENT
+  TRANSFER
+  ZELLE
+  BINANCE
+  MERCADO_PAGO
+  CARD
+}
+
 enum FulfillmentMethod {
   DELIVERY
   PICKUP
@@ -165,6 +181,7 @@ model Business {
   hardwareSettings     BusinessHardwareSettings?
   taxSettings          BusinessTaxSettings?
   publicSettings       BusinessPublicSettings?
+  paymentMethods       BusinessPaymentMethod[]
   publicOrders         PublicOrder[]
   accessRoles          AccessRole[]
   auditLogs            AuditLog[]
@@ -213,31 +230,52 @@ model BusinessPublicSettings {
   updatedAt       DateTime @updatedAt
 }
 
+model BusinessPaymentMethod {
+  id           String                    @id @default(cuid())
+  businessId   String
+  business     Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  type         BusinessPaymentMethodType
+  enabled      Boolean                   @default(false)
+  title        String
+  instructions String?
+  alias        String?
+  phone        String?
+  email        String?
+  qrImage      String?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  @@unique([businessId, type])
+  @@index([businessId])
+  @@index([businessId, enabled])
+}
+
 model PublicOrder {
-  id                String            @id @default(cuid())
+  id                String              @id @default(cuid())
   businessId        String
-  business          Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business          Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
   branchId          String?
   saleId            String?
   code              String
-  status            PublicOrderStatus @default(NEW)
+  status            PublicOrderStatus   @default(NEW)
   fulfillmentMethod FulfillmentMethod
   customerName      String
   customerPhone     String
   address           String?
   addressReference  String?
-  lat               Decimal?          @db.Decimal(10, 7)
-  lng               Decimal?          @db.Decimal(10, 7)
+  lat               Decimal?            @db.Decimal(10, 7)
+  lng               Decimal?            @db.Decimal(10, 7)
   notes             String?
   paymentMethod     String
-  subtotal          Decimal           @db.Decimal(12, 2)
-  deliveryFee       Decimal           @default(0) @db.Decimal(12, 2)
-  tax               Decimal           @default(0) @db.Decimal(12, 2)
-  total             Decimal           @db.Decimal(12, 2)
-  currency          String            @default("USD")
+  paymentStatus     PublicPaymentStatus @default(PENDING)
+  subtotal          Decimal             @db.Decimal(12, 2)
+  deliveryFee       Decimal             @default(0) @db.Decimal(12, 2)
+  tax               Decimal             @default(0) @db.Decimal(12, 2)
+  total             Decimal             @db.Decimal(12, 2)
+  currency          String              @default("USD")
   items             PublicOrderItem[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@unique([businessId, code])
   @@index([businessId, createdAt])

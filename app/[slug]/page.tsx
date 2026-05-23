@@ -86,6 +86,21 @@ export default async function PublicStorePage({ params }: PublicStorePageProps) 
       businessType: true,
       status: true,
       publicSettings: true,
+      paymentMethods: {
+        where: { enabled: true },
+        select: {
+          id: true,
+          type: true,
+          enabled: true,
+          title: true,
+          instructions: true,
+          alias: true,
+          phone: true,
+          email: true,
+          qrImage: true,
+        },
+        orderBy: { createdAt: "asc" },
+      },
       categories: {
         orderBy: { name: "asc" },
         select: { id: true, name: true },
@@ -144,6 +159,17 @@ export default async function PublicStorePage({ params }: PublicStorePageProps) 
               termsUrl: settings.termsUrl,
             }
           : defaultPublicSettings,
+        paymentMethods: business.paymentMethods.map((method) => ({
+          id: method.id,
+          type: method.type,
+          enabled: method.enabled,
+          title: method.title,
+          instructions: method.instructions,
+          alias: method.alias,
+          phone: method.phone,
+          email: method.email,
+          qrImage: method.qrImage,
+        })),
         categories: business.categories.map((category) => ({
           id: category.id,
           name: category.name,

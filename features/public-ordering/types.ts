@@ -31,6 +31,29 @@ export type PublicBusinessSettings = {
   termsUrl: string | null;
 };
 
+export type PublicPaymentMethodType =
+  | "CASH"
+  | "MOBILE_PAYMENT"
+  | "TRANSFER"
+  | "ZELLE"
+  | "BINANCE"
+  | "MERCADO_PAGO"
+  | "CARD";
+
+export type PublicPaymentStatus = "PENDING" | "CONFIRMED" | "AWAITING_PAYMENT";
+
+export type PublicBusinessPaymentMethod = {
+  id: string | null;
+  type: PublicPaymentMethodType;
+  enabled: boolean;
+  title: string;
+  instructions: string | null;
+  alias: string | null;
+  phone: string | null;
+  email: string | null;
+  qrImage: string | null;
+};
+
 export type PublicBusiness = {
   id: string;
   slug: string;
@@ -43,6 +66,7 @@ export type PublicBusiness = {
   exchangeRate: number;
   businessType: "COMMERCE" | "RESTAURANT";
   settings: PublicBusinessSettings;
+  paymentMethods: PublicBusinessPaymentMethod[];
   categories: PublicMenuCategory[];
   products: PublicMenuProduct[];
 };
@@ -53,14 +77,7 @@ export type PublicCartItem = PublicMenuProduct & {
 
 export type FulfillmentMethod = "DELIVERY" | "PICKUP" | "DINE_IN";
 
-export type PublicPaymentMethod =
-  | "cash"
-  | "transfer"
-  | "mobile_payment"
-  | "zelle"
-  | "binance"
-  | "debit"
-  | "credit";
+export type PublicPaymentMethod = PublicPaymentMethodType;
 
 export type PublicStoreMode = "ecommerce" | "menu_only";
 

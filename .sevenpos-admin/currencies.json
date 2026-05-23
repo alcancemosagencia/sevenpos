@@ -1,0 +1,35 @@
+[
+  {
+    "code": "USD",
+    "name": "Dolar estadounidense",
+    "symbol": "$",
+    "rate": 1,
+    "rounding": "0.01",
+    "active": true,
+    "default": true,
+    "country": "Global",
+    "autoProvider": "MANUAL"
+  },
+  {
+    "code": "BS",
+    "name": "Bolivar",
+    "symbol": "Bs",
+    "rate": 122,
+    "rounding": "0.01",
+    "active": true,
+    "default": false,
+    "country": "Venezuela",
+    "autoProvider": "BCV"
+  },
+  {
+    "code": "CLP",
+    "name": "Peso chileno",
+    "symbol": "$",
+    "rate": 940,
+    "rounding": "1",
+    "active": true,
+    "default": false,
+    "country": "Chile",
+    "autoProvider": "MANUAL"
+  }
+]

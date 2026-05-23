@@ -23,7 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ImageUploader } from "@/components/shared/image-uploader";
 import { updatePublicOrderingSettingsAction } from "@/features/backoffice/actions";
-import { isBusinessOpen } from "@/features/public-ordering/format";
+import { DEFAULT_PAYMENT_SETTINGS, isBusinessOpen } from "@/features/public-ordering/format";
+import type { PublicBusinessPaymentMethod, PublicPaymentMethodType } from "@/features/public-ordering/types";
 
 type PublicMenuSettings = {
   coverImageUrl: string | null;
@@ -84,27 +85,37 @@ const sections = [
   { id: "preview", label: "Vista previa", icon: ShoppingBag },
 ] as const;
 
-const paymentMethods = [
-  { label: "Efectivo", icon: Banknote, enabled: true },
-  { label: "Pago móvil", icon: CreditCard, enabled: true },
-  { label: "Transferencia", icon: Banknote, enabled: true },
-  { label: "Zelle", icon: CreditCard, enabled: false },
-  { label: "Binance", icon: CreditCard, enabled: false },
-  { label: "Mercado Pago", icon: CreditCard, enabled: false },
-  { label: "Tarjetas", icon: CreditCard, enabled: false },
-];
+const paymentIcons: Record<PublicPaymentMethodType, typeof CreditCard> = {
+  CASH: Banknote,
+  MOBILE_PAYMENT: CreditCard,
+  TRANSFER: Banknote,
+  ZELLE: CreditCard,
+  BINANCE: CreditCard,
+  MERCADO_PAGO: CreditCard,
+  CARD: CreditCard,
+};
+
+function mergePaymentMethods(methods: PublicBusinessPaymentMethod[] | null | undefined) {
+  const persisted = new Map((Array.isArray(methods) ? methods : []).map((method) => [method.type, method]));
+  return DEFAULT_PAYMENT_SETTINGS.map((method) => ({ ...method, ...(persisted.get(method.type) ?? {}) }));
+}
 
 export function PublicMenuSettingsClient({
   business,
   settings,
+  paymentMethods: savedPaymentMethods,
+  initialSection = "brand",
 }: {
   business: BusinessPreview | null;
   settings: Partial<PublicMenuSettings> | null;
+  paymentMethods?: PublicBusinessPaymentMethod[] | null;
+  initialSection?: (typeof sections)[number]["id"];
 }) {
   const safeBusiness = business ?? { name: "SevenPOS", slug: "" };
   const initial = { ...defaultSettings, ...(settings ?? {}) };
-  const [activeSection, setActiveSection] = useState<(typeof sections)[number]["id"]>("brand");
+  const [activeSection, setActiveSection] = useState<(typeof sections)[number]["id"]>(initialSection);
   const [draft, setDraft] = useState(initial);
+  const [paymentDrafts, setPaymentDrafts] = useState(() => mergePaymentMethods(savedPaymentMethods));
   const activeDaysValue = draft.activeDays || defaultSettings.activeDays;
   const activeDays = useMemo(() => new Set(activeDaysValue.split(",").map((day) => day.trim()).filter(Boolean)), [activeDaysValue]);
   const openNow = isBusinessOpen(activeDaysValue, draft.openTime || defaultSettings.openTime, draft.closeTime || defaultSettings.closeTime);
@@ -119,6 +130,10 @@ export function PublicMenuSettingsClient({
     if (next.has(value)) next.delete(value);
     else next.add(value);
     updateDraft("activeDays", Array.from(next).sort().join(","));
+  }
+
+  function updatePaymentDraft(type: PublicPaymentMethodType, patch: Partial<PublicBusinessPaymentMethod>) {
+    setPaymentDrafts((current) => current.map((method) => (method.type === type ? { ...method, ...patch } : method)));
   }
 
   return (
@@ -171,6 +186,7 @@ export function PublicMenuSettingsClient({
             <input type="hidden" name="activeDays" value={activeDaysValue} />
             <input type="hidden" name="openTime" value={draft.openTime} />
             <input type="hidden" name="closeTime" value={draft.closeTime} />
+            <input type="hidden" name="paymentMethodsJson" value={JSON.stringify(paymentDrafts)} />
             {draft.deliveryEnabled ? <input type="hidden" name="deliveryEnabled" value="on" /> : null}
             {draft.pickupEnabled ? <input type="hidden" name="pickupEnabled" value="on" /> : null}
             {draft.dineInEnabled ? <input type="hidden" name="dineInEnabled" value="on" /> : null}
@@ -290,22 +306,49 @@ export function PublicMenuSettingsClient({
 
               {activeSection === "payments" ? (
                 <div className="space-y-3">
-                  <p className="text-sm text-slate-500">Configuración visual preparada para métodos por negocio. El checkout actual conserva compatibilidad por país.</p>
+                  <p className="text-sm text-slate-500">Configura los medios de pago reales de este negocio. El checkout publico solo mostrara los metodos activos.</p>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {paymentMethods.map((method) => {
-                      const Icon = method.icon;
+                    {paymentDrafts.map((method) => {
+                      const Icon = paymentIcons[method.type];
                       return (
-                        <div key={method.label} className="flex items-center justify-between rounded-lg border bg-white p-3">
-                          <div className="flex items-center gap-3">
-                            <span className="flex size-9 items-center justify-center rounded-lg bg-slate-100 text-slate-800"><Icon className="size-4" /></span>
-                            <div>
-                              <p className="text-sm font-medium text-slate-900">{method.label}</p>
-                              <p className="text-xs text-slate-500">Instrucciones, alias y QR opcional.</p>
+                        <div key={method.type} className="space-y-3 rounded-lg border bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span className="flex size-9 items-center justify-center rounded-lg bg-slate-100 text-slate-800"><Icon className="size-4" /></span>
+                              <div>
+                                <p className="text-sm font-medium text-slate-900">{method.title}</p>
+                                <p className="text-xs text-slate-500">Instrucciones, alias, contacto y QR.</p>
+                              </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => updatePaymentDraft(method.type, { enabled: !method.enabled })}
+                              className={`rounded-full px-2 py-1 text-[11px] font-medium ${method.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+                            >
+                              {method.enabled ? "Activo" : "Inactivo"}
+                            </button>
                           </div>
-                          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${method.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                            {method.enabled ? "Activo" : "Listo"}
-                          </span>
+
+                          {method.enabled ? (
+                            <div className="grid gap-2">
+                              <Field label="Titulo visible" name={`${method.type}-title`} value={method.title} onChange={(value) => updatePaymentDraft(method.type, { title: value })} />
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <Field label="Alias / referencia" name={`${method.type}-alias`} value={method.alias ?? ""} onChange={(value) => updatePaymentDraft(method.type, { alias: value })} />
+                                <Field label="Telefono" name={`${method.type}-phone`} value={method.phone ?? ""} onChange={(value) => updatePaymentDraft(method.type, { phone: value })} />
+                              </div>
+                              <Field label="Email / cuenta" name={`${method.type}-email`} value={method.email ?? ""} onChange={(value) => updatePaymentDraft(method.type, { email: value })} />
+                              <Field label="Instrucciones" name={`${method.type}-instructions`} value={method.instructions ?? ""} onChange={(value) => updatePaymentDraft(method.type, { instructions: value })} />
+                              <ImageUploader
+                                name={`${method.type}-qrImage`}
+                                label="QR de pago"
+                                kind="generic"
+                                value={method.qrImage ?? ""}
+                                onChange={(value) => updatePaymentDraft(method.type, { qrImage: value })}
+                                variant="compact"
+                                previewClassName="min-h-20"
+                              />
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}

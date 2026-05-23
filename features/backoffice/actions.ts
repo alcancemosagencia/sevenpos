@@ -5,6 +5,8 @@ import { can } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 import { slugify } from "@/lib/slug";
+import { DEFAULT_PAYMENT_SETTINGS } from "@/features/public-ordering/format";
+import type { PublicBusinessPaymentMethod, PublicPaymentMethodType } from "@/features/public-ordering/types";
 
 function readString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -14,6 +16,48 @@ function readString(formData: FormData, key: string) {
 function readNumber(formData: FormData, key: string, fallback = 0) {
   const value = Number(readString(formData, key));
   return Number.isFinite(value) ? value : fallback;
+}
+
+const businessPaymentMethodTypes = new Set<PublicPaymentMethodType>([
+  "CASH",
+  "MOBILE_PAYMENT",
+  "TRANSFER",
+  "ZELLE",
+  "BINANCE",
+  "MERCADO_PAGO",
+  "CARD",
+]);
+
+function readPaymentMethods(formData: FormData): PublicBusinessPaymentMethod[] {
+  const raw = readString(formData, "paymentMethodsJson");
+  if (!raw) return DEFAULT_PAYMENT_SETTINGS;
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return DEFAULT_PAYMENT_SETTINGS;
+
+    return parsed
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .filter((item) => businessPaymentMethodTypes.has(item.type as PublicPaymentMethodType))
+      .map((item) => {
+        const defaults = DEFAULT_PAYMENT_SETTINGS.find((method) => method.type === item.type);
+        const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : defaults?.title ?? String(item.type);
+
+        return {
+          id: typeof item.id === "string" ? item.id : null,
+          type: item.type as PublicPaymentMethodType,
+          enabled: Boolean(item.enabled),
+          title,
+          instructions: typeof item.instructions === "string" && item.instructions.trim() ? item.instructions.trim() : null,
+          alias: typeof item.alias === "string" && item.alias.trim() ? item.alias.trim() : null,
+          phone: typeof item.phone === "string" && item.phone.trim() ? item.phone.trim() : null,
+          email: typeof item.email === "string" && item.email.trim() ? item.email.trim() : null,
+          qrImage: typeof item.qrImage === "string" && item.qrImage.trim() ? item.qrImage.trim() : null,
+        };
+      });
+  } catch {
+    return DEFAULT_PAYMENT_SETTINGS;
+  }
 }
 
 async function requireBusiness() {
@@ -206,7 +250,35 @@ export async function updatePublicOrderingSettingsAction(formData: FormData) {
     },
   });
 
+  const paymentMethods = readPaymentMethods(formData);
+  for (const method of paymentMethods) {
+    await prisma.businessPaymentMethod.upsert({
+      where: { businessId_type: { businessId: tenant.businessId, type: method.type } },
+      create: {
+        businessId: tenant.businessId,
+        type: method.type,
+        enabled: method.enabled,
+        title: method.title,
+        instructions: method.instructions,
+        alias: method.alias,
+        phone: method.phone,
+        email: method.email,
+        qrImage: method.qrImage,
+      },
+      update: {
+        enabled: method.enabled,
+        title: method.title,
+        instructions: method.instructions,
+        alias: method.alias,
+        phone: method.phone,
+        email: method.email,
+        qrImage: method.qrImage,
+      },
+    });
+  }
+
   revalidatePath("/settings");
+  revalidatePath("/public-menu/settings");
   if (tenant.currentBusiness?.slug) revalidatePath(`/${tenant.currentBusiness.slug}`);
 }
 

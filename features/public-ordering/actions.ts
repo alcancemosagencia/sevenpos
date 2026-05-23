@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { isBusinessOpen, publicCurrency } from "@/features/public-ordering/format";
-import type { FulfillmentMethod } from "@/features/public-ordering/types";
+import { isBusinessOpen, paymentStatusForType, publicCurrency, resolvePaymentOptions } from "@/features/public-ordering/format";
+import type { FulfillmentMethod, PublicPaymentMethodType } from "@/features/public-ordering/types";
 import type { PaymentMethod } from "@prisma/client";
 
 type PublicOrderInput = {
@@ -35,6 +35,20 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
       country: true,
       currency: true,
       publicSettings: true,
+      paymentMethods: {
+        where: { enabled: true },
+        select: {
+          id: true,
+          type: true,
+          enabled: true,
+          title: true,
+          instructions: true,
+          alias: true,
+          phone: true,
+          email: true,
+          qrImage: true,
+        },
+      },
       branches: {
         where: { isActive: true },
         orderBy: [{ isMain: "desc" }, { createdAt: "asc" }],
@@ -79,12 +93,18 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
   const operator = business.users[0] ?? null;
   if (!operator) return { ok: false, error: "El negocio no tiene un operador activo para registrar ventas online." };
 
+  const paymentOptions = resolvePaymentOptions(business.paymentMethods);
+  const selectedPayment = paymentOptions.find((method) => method.value === input.paymentMethod);
+  if (!selectedPayment) return { ok: false, error: "Metodo de pago no disponible." };
+
+  const publicPaymentType = selectedPayment.value as PublicPaymentMethodType;
   const salePaymentMethod: PaymentMethod =
-    input.paymentMethod === "cash"
+    publicPaymentType === "CASH"
       ? "CASH_USD"
-      : input.paymentMethod === "mobile_payment"
+      : publicPaymentType === "MOBILE_PAYMENT"
         ? "MOBILE_PAYMENT"
         : "BANK_TRANSFER";
+  const paymentStatus = paymentStatusForType(publicPaymentType);
 
   const order = await prisma.$transaction(async (tx) => {
     const products = await tx.product.findMany({
@@ -229,7 +249,8 @@ export async function createPublicOrderAction(input: PublicOrderInput) {
         lat: typeof input.lat === "number" ? input.lat.toFixed(7) : null,
         lng: typeof input.lng === "number" ? input.lng.toFixed(7) : null,
         notes: input.notes?.trim() || null,
-        paymentMethod: input.paymentMethod,
+        paymentMethod: selectedPayment.title,
+        paymentStatus,
         subtotal: subtotal.toFixed(2),
         deliveryFee: deliveryFee.toFixed(2),
         tax: tax.toFixed(2),

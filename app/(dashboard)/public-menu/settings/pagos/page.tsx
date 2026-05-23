@@ -3,7 +3,7 @@ import { decimalToNumber } from "@/features/pos/format";
 import { prisma } from "@/lib/prisma";
 import { requireTenantContext } from "@/lib/tenant";
 
-export default async function PublicMenuSettingsPage() {
+export default async function PublicMenuPaymentsSettingsPage() {
   const tenant = await requireTenantContext();
   if (!tenant.businessId || !tenant.currentBusiness) return null;
 
@@ -53,6 +53,7 @@ export default async function PublicMenuSettingsPage() {
           : null
       }
       paymentMethods={paymentMethods}
+      initialSection="payments"
     />
   );
 }

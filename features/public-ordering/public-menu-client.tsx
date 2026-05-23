@@ -30,7 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createPublicOrderAction } from "@/features/public-ordering/actions";
-import { formatPublicMoney, isBusinessOpen, paymentOptions, publicCurrency } from "@/features/public-ordering/format";
+import { formatPublicMoney, isBusinessOpen, publicCurrency, resolvePaymentOptions } from "@/features/public-ordering/format";
 import { GoogleAddressInput } from "@/features/public-ordering/google-address-input";
 import type { FulfillmentMethod, PublicBusiness, PublicCartItem, PublicMenuProduct, PublicPaymentMethod } from "@/features/public-ordering/types";
 import { resolvePublicStoreMode } from "@/features/public-ordering/types";
@@ -95,7 +95,7 @@ function fulfillmentLabel(value: FulfillmentMethod) {
 }
 
 function paymentIcon(value: PublicPaymentMethod) {
-  if (value === "cash") return Wallet;
+  if (value === "CASH") return Wallet;
   return CreditCard;
 }
 
@@ -129,7 +129,7 @@ function publicStatusSteps(status: PublicOrderStatus, fulfillment: FulfillmentMe
 
 export function PublicMenuClient({ business }: { business: PublicBusiness }) {
   const currency = publicCurrency(business.country, business.currency);
-  const paymentMethods = paymentOptions(business.country);
+  const paymentMethods = useMemo(() => resolvePaymentOptions(business.paymentMethods), [business.paymentMethods]);
   const openNow = isBusinessOpen(business.settings.activeDays, business.settings.openTime, business.settings.closeTime);
   const storeMode = resolvePublicStoreMode(business.settings);
   const menuOnly = storeMode === "menu_only";
@@ -142,7 +142,7 @@ export function PublicMenuClient({ business }: { business: PublicBusiness }) {
   const [customer, setCustomer] = useState<CustomerDraft>(emptyCustomer);
   const [orders, setOrders] = useState<LocalOrder[]>([]);
   const [fulfillment, setFulfillment] = useState<FulfillmentMethod>(business.settings.deliveryEnabled ? "DELIVERY" : business.settings.pickupEnabled ? "PICKUP" : "DINE_IN");
-  const [paymentMethod, setPaymentMethod] = useState<PublicPaymentMethod>(paymentMethods[0]?.value ?? "cash");
+  const [paymentMethod, setPaymentMethod] = useState<PublicPaymentMethod>(paymentMethods[0]?.value ?? "CASH");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null);

@@ -1,3 +1,5 @@
+import type { PublicBusinessPaymentMethod, PublicPaymentMethodType, PublicPaymentStatus } from "@/features/public-ordering/types";
+
 export function countryCode(country: string | null) {
   const value = (country ?? "").trim().toLowerCase();
   if (value.includes("venezuela")) return "VE";
@@ -28,23 +30,38 @@ export function formatPublicMoney(value: number, currency: string) {
   }).format(value);
 }
 
-export function paymentOptions(country: string | null) {
-  if (countryCode(country) === "CL") {
-    return [
-      { value: "cash", label: "Efectivo" },
-      { value: "transfer", label: "Transferencia" },
-      { value: "debit", label: "Débito" },
-      { value: "credit", label: "Crédito" },
-    ] as const;
-  }
+export type PublicPaymentOption = PublicBusinessPaymentMethod & {
+  value: PublicPaymentMethodType;
+  label: string;
+  paymentStatus: PublicPaymentStatus;
+};
 
-  return [
-    { value: "cash", label: "Efectivo" },
-    { value: "mobile_payment", label: "Pago móvil" },
-    { value: "zelle", label: "Zelle" },
-    { value: "binance", label: "Binance" },
-    { value: "transfer", label: "Transferencia" },
-  ] as const;
+export const DEFAULT_PAYMENT_SETTINGS: PublicBusinessPaymentMethod[] = [
+  { id: null, type: "CASH", enabled: true, title: "Efectivo", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+  { id: null, type: "MOBILE_PAYMENT", enabled: true, title: "Pago movil", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+  { id: null, type: "TRANSFER", enabled: true, title: "Transferencia", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+  { id: null, type: "ZELLE", enabled: false, title: "Zelle", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+  { id: null, type: "BINANCE", enabled: false, title: "Binance", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+  { id: null, type: "MERCADO_PAGO", enabled: false, title: "Mercado Pago", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+  { id: null, type: "CARD", enabled: false, title: "Tarjetas", instructions: null, alias: null, phone: null, email: null, qrImage: null },
+];
+
+export function paymentStatusForType(type: PublicPaymentMethodType): PublicPaymentStatus {
+  return type === "CASH" ? "PENDING" : "AWAITING_PAYMENT";
+}
+
+export function resolvePaymentOptions(methods: PublicBusinessPaymentMethod[] | null | undefined): PublicPaymentOption[] {
+  const configured = Array.isArray(methods) && methods.length > 0 ? methods : DEFAULT_PAYMENT_SETTINGS;
+  const active = configured.filter((method) => method.enabled);
+  const source = active.length > 0 ? active : DEFAULT_PAYMENT_SETTINGS.filter((method) => method.enabled);
+
+  return source
+    .map((method) => ({
+      ...method,
+      value: method.type,
+      label: method.title,
+      paymentStatus: paymentStatusForType(method.type),
+    }));
 }
 
 export function isBusinessOpen(activeDays: string, openTime: string, closeTime: string, now = new Date()) {

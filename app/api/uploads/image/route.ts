@@ -9,14 +9,53 @@ import { assertTenantBusinessId } from "@/lib/tenant-guards";
 
 const validKinds = new Set<ImageUploadKind>(["product", "logo", "cover", "generic"]);
 
+class StorageUploadError extends Error {
+  status: number;
+  detail: string;
+
+  constructor(status: number, detail: string) {
+    super(detail);
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 function normalizeKind(value: FormDataEntryValue | null): ImageUploadKind {
   return typeof value === "string" && validKinds.has(value as ImageUploadKind) ? (value as ImageUploadKind) : "generic";
 }
 
-async function uploadToSupabaseStorage(file: File, objectPath: string) {
+function bucketForKind(kind: ImageUploadKind) {
+  if (kind === "product") return process.env.SUPABASE_PRODUCTS_BUCKET ?? "products";
+  return process.env.SUPABASE_STORAGE_BUCKET ?? "sevenpos-uploads";
+}
+
+async function readStorageError(response: Response) {
+  const text = await response.text();
+  if (!text) return `${response.status} ${response.statusText}`;
+
+  try {
+    const payload = JSON.parse(text) as { error?: string; message?: string; statusCode?: string; code?: string };
+    const message = payload.message ?? payload.error ?? text;
+    const code = payload.code ? ` (${payload.code})` : "";
+    return `${response.status} ${response.statusText}: ${message}${code}`;
+  } catch {
+    return `${response.status} ${response.statusText}: ${text}`;
+  }
+}
+
+function publicStorageErrorMessage(error: StorageUploadError) {
+  const detail = error.detail.toLowerCase();
+  if (error.status === 401) return `401: credenciales de storage invalidas. ${error.detail}`;
+  if (error.status === 403) return `403: policy violation o permisos insuficientes. ${error.detail}`;
+  if (error.status === 404 || detail.includes("bucket")) return `Bucket missing o ruta no encontrada. ${error.detail}`;
+  if (detail.includes("policy")) return `Policy violation: ${error.detail}`;
+  return `No se pudo subir la imagen. ${error.detail}`;
+}
+
+async function uploadToSupabaseStorage(file: File, objectPath: string, kind: ImageUploadKind) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET ?? "sevenpos-uploads";
+  const bucket = bucketForKind(kind);
 
   if (!supabaseUrl || !serviceRoleKey) return null;
 
@@ -33,7 +72,7 @@ async function uploadToSupabaseStorage(file: File, objectPath: string) {
   });
 
   if (!response.ok) {
-    throw new Error("No se pudo subir la imagen");
+    throw new StorageUploadError(response.status, await readStorageError(response));
   }
 
   return `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${bucket}/${objectPath}`;
@@ -77,9 +116,13 @@ export async function POST(request: Request) {
   let supabaseUrl: string | null = null;
 
   try {
-    supabaseUrl = await uploadToSupabaseStorage(file, storagePath);
-  } catch {
-    return NextResponse.json({ error: "No se pudo subir la imagen" }, { status: 500 });
+    supabaseUrl = await uploadToSupabaseStorage(file, storagePath, kind);
+  } catch (error) {
+    if (error instanceof StorageUploadError) {
+      return NextResponse.json({ error: publicStorageErrorMessage(error), path: storagePath }, { status: error.status });
+    }
+
+    return NextResponse.json({ error: "No se pudo subir la imagen", path: storagePath }, { status: 500 });
   }
 
   if (supabaseUrl) {
@@ -91,7 +134,7 @@ export async function POST(request: Request) {
 
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
-      { error: "Storage no configurado. Define NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY y SUPABASE_STORAGE_BUCKET." },
+      { error: "Storage no configurado. Define NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY y SUPABASE_STORAGE_BUCKET/SUPABASE_PRODUCTS_BUCKET." },
       { status: 501 },
     );
   }
