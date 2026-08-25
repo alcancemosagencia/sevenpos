@@ -1,0 +1,7 @@
+node_modules
+target
+src-tauri
+scratch
+*.png
+.git
+.puppeteer-test-profile
