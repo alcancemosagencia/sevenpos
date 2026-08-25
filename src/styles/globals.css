@@ -1,0 +1,248 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "@fontsource/urbanist/300.css";
+@import "@fontsource/urbanist/400.css";
+@import "@fontsource/urbanist/500.css";
+@import "@fontsource/urbanist/600.css";
+@import "@fontsource/urbanist/700.css";
+@import "@fontsource/urbanist/800.css";
+
+@layer base {
+  :root {
+    /* Radius Tokens - Semánticos calibrados */
+    --radius-control: 0.5rem;    /* 8px - Inputs, badges, search pills */
+    --radius-button: 0.75rem;    /* 12px - Botones principales y secundarios */
+    --radius-card: 1rem;         /* 16px - Cards de KPIs y superficies de contenido */
+    --radius-surface: 1.25rem;   /* 20px - Paneles mayores y contenedores */
+    --radius-modal: 1.5rem;      /* 24px - Modales y diálogos */
+    
+    /* Spacing Tokens */
+    --spacing-xs: 0.25rem;  /* 4px */
+    --spacing-sm: 0.5rem;   /* 8px */
+    --spacing-md: 0.75rem;  /* 12px */
+    --spacing-lg: 1rem;     /* 16px */
+    --spacing-xl: 1.25rem;  /* 20px */
+    --spacing-2xl: 1.5rem;  /* 24px */
+    --spacing-3xl: 2rem;    /* 32px */
+    --spacing-4xl: 2.5rem;  /* 40px */
+    --spacing-5xl: 3rem;    /* 48px */
+
+    /* Brand Tokens */
+    --brand-primary: #0066ff;
+    --brand-primary-hover: #0052cc;
+    --brand-secondary: #7c3aed;
+    --brand-gradient: linear-gradient(135deg, #0066ff 0%, #7c3aed 100%);
+    
+    /* Light Theme (Default fallback) */
+    --background: #f8fafc;
+    --sidebar-bg: #ffffff;
+    --surface: #ffffff;
+    --surface-primary: #ffffff;
+    --surface-secondary: #f1f5f9;
+    --surface-raised: #ffffff;
+    --surface-hover: #f1f5f9;
+    --surface-selected: #e2e8f0;
+    
+    --border-subtle: #f1f5f9;
+    --border-default: #e2e8f0;
+    --border-strong: #cbd5e1;
+
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --text-tertiary: #94a3b8;
+    --text-disabled: #cbd5e1;
+
+    /* Semantic Statuses */
+    --status-success: #10b981;
+    --status-success-bg: #ecfdf5;
+    --status-success-text: #047857;
+    
+    --status-warning: #f59e0b;
+    --status-warning-bg: #fffbeb;
+    --status-warning-text: #b45309;
+    
+    --status-danger: #ef4444;
+    --status-danger-bg: #fef2f2;
+    --status-danger-text: #b91c1c;
+    
+    --status-info: #3b82f6;
+    --status-info-bg: #eff6ff;
+    --status-info-text: #1d4ed8;
+
+    /* Shadows */
+    --shadow-subtle: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+    --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+    --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Dark Theme (Prioritario - Charcoal / Neutral Black Baseline) */
+  .dark {
+    --background: #09090b;
+    --sidebar-bg: #0d0d0f;
+    --surface: #141416;
+    --surface-primary: #141416;
+    --surface-secondary: #1c1c1f;
+    --surface-raised: #242428;
+    --surface-hover: #202024;
+    --surface-selected: #28282d;
+    
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-default: rgba(255, 255, 255, 0.10);
+    --border-strong: rgba(255, 255, 255, 0.18);
+
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+    --text-disabled: #52525b;
+
+    /* Semantic Statuses Dark */
+    --status-success: #10b981;
+    --status-success-bg: rgba(16, 185, 129, 0.12);
+    --status-success-text: #34d399;
+    
+    --status-warning: #f59e0b;
+    --status-warning-bg: rgba(245, 158, 11, 0.12);
+    --status-warning-text: #fbbf24;
+    
+    --status-danger: #ef4444;
+    --status-danger-bg: rgba(239, 68, 68, 0.12);
+    --status-danger-text: #f87171;
+    
+    --status-info: #3b82f6;
+    --status-info-bg: rgba(59, 130, 246, 0.12);
+    --status-info-text: #60a5fa;
+
+    /* Shadows Dark (Contraste de bordes y elevación sin saturación) */
+    --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow-card: 0 4px 12px 0 rgba(0, 0, 0, 0.45);
+    --shadow-elevated: 0 12px 28px 0 rgba(0, 0, 0, 0.65);
+  }
+}
+
+@theme {
+  --font-sans: 'Urbanist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  --color-background: var(--background);
+  --color-sidebar: var(--sidebar-bg);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-selected: var(--surface-selected);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-disabled: var(--text-disabled);
+
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-hover: var(--brand-primary-hover);
+  --color-brand-secondary: var(--brand-secondary);
+
+  --color-status-success: var(--status-success);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-text: var(--status-success-text);
+
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-text: var(--status-warning-text);
+
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-text: var(--status-danger-text);
+
+  --color-status-info: var(--status-info);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-text: var(--status-info-text);
+
+  --radius-control: var(--radius-control);
+  --radius-button: var(--radius-button);
+  --radius-card: var(--radius-card);
+  --radius-surface: var(--radius-surface);
+  --radius-modal: var(--radius-modal);
+}
+
+/* Custom utility classes & scrollbar */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--background);
+  color: var(--text-primary);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* =========================================================================
+   Print Isolation: Clean Thermal Receipt Print
+   ========================================================================= */
+@media screen {
+  #sevenpos-print-root {
+    display: none !important;
+  }
+}
+
+@media print {
+  /* Hide every part of the application DOM except the isolated print container */
+  body > *:not(#sevenpos-print-root) {
+    display: none !important;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  #sevenpos-print-root {
+    display: block !important;
+    position: static !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 2mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  #sevenpos-print-root[data-format="58mm"] {
+    width: 58mm !important;
+    max-width: 58mm !important;
+  }
+
+  @page {
+    margin: 0;
+    size: auto;
+  }
+}
