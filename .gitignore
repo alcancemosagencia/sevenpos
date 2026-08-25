@@ -44,3 +44,5 @@ target/
 .puppeteer-test-profile/
 scratch/
 /*.png
+
+.vercel
