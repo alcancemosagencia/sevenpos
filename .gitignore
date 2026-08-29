@@ -46,3 +46,4 @@ scratch/
 /*.png
 
 .vercel
+supabase/.temp/

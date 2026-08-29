@@ -7,12 +7,20 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { OnboardingFlow } from '../features/onboarding/OnboardingFlow';
 import { PinLoginPage } from '../features/auth/PinLoginPage';
+import { AccountLoginPage } from '../features/auth/AccountLoginPage';
+import { RegisterAccountPage } from '../features/auth/RegisterAccountPage';
+import { VerifyEmailPage } from '../features/auth/VerifyEmailPage';
+import { DeviceEnrollmentPage } from '../features/auth/DeviceEnrollmentPage';
+import { SetupPinModal } from '../features/auth/SetupPinModal';
+import { LinkAccountModal } from '../features/auth/LinkAccountModal';
+import { LinkAccountBanner } from '../features/auth/LinkAccountBanner';
 import { ErrorBoundary } from '../components/errors/ErrorBoundary';
 import { DatabaseBootErrorScreen } from '../components/errors/DatabaseBootErrorScreen';
 import { DiagnosticsModal } from '../components/dev/DiagnosticsModal';
 import { ScannerSimulatorModal } from '../components/dev/ScannerSimulatorModal';
-import { resolveEntryRoute, syncBrowserUrl, normalizeProtectedPath, AppRoute } from '../application/routing/RouteResolver';
-import { Activity } from 'lucide-react';
+import { syncBrowserUrl, normalizeProtectedPath, AppRoute } from '../application/routing/RouteResolver';
+import { Activity, WifiOff, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 
 import { ProductsListPage } from '../pages/ProductsListPage';
 import { ProductFormPage } from '../pages/ProductFormPage';
@@ -161,12 +169,31 @@ const AppRoot: React.FC = () => {
     bootStatus,
     bootError,
     retryBoot,
+    authMachineState,
     onboardingStatus,
-    sessionStatus,
     isCompletionCelebrationActive,
     activeBusinessName,
     activeOwnerName,
+    activeCountryCode,
+    cloudMembership,
+    isCloudLinked,
+    pendingEmailForVerification,
+    signInWithEmail,
+    signUpWithEmail,
+    checkEmailVerified,
+    resendVerificationEmail,
+    sendPasswordReset,
+    enrollDevice,
+    setupNewDevicePin,
+    isLinkingModalOpen,
+    openLinkingModal,
+    closeLinkingModal,
+    linkExistingLocalBusinessWithNewAccount,
+    linkExistingLocalBusinessWithExistingAccount,
     lockSession,
+    goToAccountLogin,
+    goToRegister,
+    state,
   } = useAuth();
 
   const [activeNavId, setActiveNavId] = useState<string>(() => {
@@ -210,20 +237,28 @@ const AppRoot: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
-  // Compute canonical route based on single source of truth and requested pathname
-  const requestedPath = typeof window !== 'undefined' ? window.location.pathname : undefined;
-  const currentRoute = resolveEntryRoute({
-    isHydrated,
-    onboardingStatus,
-    sessionStatus,
-    isCompletionCelebrationActive,
-    requestedPath,
-  });
-
-  // Synchronize browser URL when auth state or route resolves
+  // Synchronize browser URL based on active navigation and auth machine state
   useEffect(() => {
-    syncBrowserUrl(currentRoute);
-  }, [currentRoute]);
+    if (!isHydrated) {
+      syncBrowserUrl('loading');
+      return;
+    }
+
+    if (authMachineState === 'ACCOUNT_REQUIRED' || authMachineState === 'DEVICE_LOCKED') {
+      syncBrowserUrl('/login');
+      return;
+    }
+
+    if (authMachineState === 'CLOUD_AUTHENTICATED' || isCompletionCelebrationActive || onboardingStatus === 'incomplete') {
+      syncBrowserUrl('/register');
+      return;
+    }
+
+    if (authMachineState === 'DEVICE_UNLOCKED') {
+      const targetRoute = getCanonicalPathForNavId(activeNavId);
+      syncBrowserUrl(targetRoute);
+    }
+  }, [isHydrated, authMachineState, isCompletionCelebrationActive, onboardingStatus, activeNavId]);
 
   const handleNavigateNav = (navId: string) => {
     if (navId.startsWith('/customers/')) {
@@ -256,52 +291,6 @@ const AppRoot: React.FC = () => {
     }
   };
 
-  // Guard 0: Native boot failure
-  if (bootStatus === 'BOOT_FAILURE') {
-    return <DatabaseBootErrorScreen error={bootError} onRetry={retryBoot} />;
-  }
-
-  // Guard 1: Loading splash while hydrating from SQLite/repositories
-  if (currentRoute === 'loading') {
-    return (
-      <div className="h-screen w-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-brand-primary border-t-transparent animate-spin" />
-      </div>
-    );
-  }
-
-  // Guard 2: If onboarding is incomplete, render First Run Experience (/register)
-  if (currentRoute === '/register') {
-    return (
-      <>
-        <OnboardingFlow />
-        {renderDevTools()}
-      </>
-    );
-  }
-
-  // Guard 3: If onboarding is completed and session is locked, render PIN Login (/login)
-  if (currentRoute === '/login') {
-    return (
-      <>
-        <PinLoginPage />
-        {renderDevTools()}
-      </>
-    );
-  }
-
-  // Guard 4: If completed and unlocked, render full App Shell (with active protected route)
-  let currentPageTitle = NAV_TITLES[activeNavId] || 'SevenPOS';
-  if (activeNavId === 'products') {
-    if (productSubView === 'new') currentPageTitle = 'Catálogo — Nuevo Producto';
-    else if (productSubView === 'edit') currentPageTitle = 'Catálogo — Editar Producto';
-    else if (productSubView === 'detail') currentPageTitle = 'Catálogo — Detalle de Producto';
-  }
-  if (activeNavId === 'purchase-orders') {
-    if (purchaseOrderSubView === 'new') currentPageTitle = 'Compras — Nueva Orden de Compra';
-    else if (purchaseOrderSubView === 'detail') currentPageTitle = 'Compras — Detalle de Orden';
-  }
-
   function renderDevTools() {
     if (!import.meta.env.DEV) return null;
     return (
@@ -326,6 +315,160 @@ const AppRoot: React.FC = () => {
         />
       </>
     );
+  }
+
+  // 1. Boot failure
+  if (bootStatus === 'BOOT_FAILURE') {
+    return <DatabaseBootErrorScreen error={bootError} onRetry={retryBoot} />;
+  }
+
+  // 2. Loading splash while hydrating
+  if (!isHydrated || authMachineState === 'BOOTING') {
+    return (
+      <div className="h-screen w-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-brand-primary border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  // 3. Offline on new device
+  if (authMachineState === 'OFFLINE_NEW_DEVICE') {
+    return (
+      <div className="min-h-screen w-full bg-background flex items-center justify-center p-6 text-center">
+        <div className="max-w-md bg-surface border border-border-default rounded-3xl p-8 space-y-5 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-status-danger/10 text-status-danger flex items-center justify-center mx-auto">
+            <WifiOff size={28} />
+          </div>
+          <h1 className="text-xl font-bold text-text-primary">Conexión a Internet requerida</h1>
+          <p className="text-xs text-text-secondary">
+            Necesitas conexión a Internet para vincular este dispositivo por primera vez. Una vez vinculado, podrás operar sin conexión mediante PIN.
+          </p>
+          <Button variant="brand" size="md" onClick={retryBoot} leftIcon={<RotateCcw size={15} />} className="w-full">
+            Reintentar conexión
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Cloud Configuration Error
+  if (authMachineState === 'CLOUD_CONFIGURATION_ERROR') {
+    return (
+      <div className="min-h-screen w-full bg-background flex items-center justify-center p-6 text-center">
+        <div className="max-w-md bg-surface border border-status-danger/30 rounded-3xl p-8 space-y-5 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-status-danger/10 text-status-danger flex items-center justify-center mx-auto">
+            <AlertTriangle size={28} />
+          </div>
+          <h1 className="text-xl font-bold text-text-primary">Configuración Cloud no detectada</h1>
+          <p className="text-xs text-text-secondary">
+            Las variables de entorno <code className="font-mono text-brand-primary">VITE_SUPABASE_URL</code> y{' '}
+            <code className="font-mono text-brand-primary">VITE_SUPABASE_PUBLISHABLE_KEY</code> deben estar configuradas.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Account Login Required (Email + Password on new device)
+  if (authMachineState === 'ACCOUNT_REQUIRED') {
+    return (
+      <>
+        <AccountLoginPage
+          onLogin={signInWithEmail}
+          onGoToRegister={goToRegister}
+          onForgotPassword={sendPasswordReset}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 6. Registration Page
+  if (authMachineState === 'CLOUD_AUTHENTICATED') {
+    return (
+      <>
+        <RegisterAccountPage
+          onRegister={signUpWithEmail}
+          onBackToLogin={goToAccountLogin}
+          defaultBusinessName={state.business.name}
+          defaultCountryCode={state.countryCode}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 7. Email Verification Required
+  if (authMachineState === 'EMAIL_VERIFICATION_REQUIRED') {
+    return (
+      <>
+        <VerifyEmailPage
+          email={pendingEmailForVerification}
+          onCheckVerification={checkEmailVerified}
+          onResendEmail={resendVerificationEmail}
+          onBackToLogin={goToAccountLogin}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 8. Device Enrollment Required
+  if (authMachineState === 'DEVICE_ENROLLMENT_REQUIRED') {
+    return (
+      <>
+        <DeviceEnrollmentPage
+          businessName={cloudMembership?.businessName || state.business.name || 'Mi Negocio'}
+          onEnroll={enrollDevice}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 9. PIN Setup Required
+  if (authMachineState === 'PIN_SETUP_REQUIRED') {
+    return (
+      <>
+        <SetupPinModal
+          isOpen={true}
+          onSavePin={setupNewDevicePin}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 10. Legacy Local Onboarding (First-Run Experience step 1-6)
+  if (onboardingStatus === 'incomplete' || isCompletionCelebrationActive) {
+    return (
+      <>
+        <OnboardingFlow />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 11. Locked Session: PIN entry
+  if (authMachineState === 'DEVICE_LOCKED') {
+    return (
+      <>
+        <PinLoginPage />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 12. Unlocked Session: Main App Shell
+  let currentPageTitle = NAV_TITLES[activeNavId] || 'SevenPOS';
+  if (activeNavId === 'products') {
+    if (productSubView === 'new') currentPageTitle = 'Catálogo — Nuevo Producto';
+    else if (productSubView === 'edit') currentPageTitle = 'Catálogo — Editar Producto';
+    else if (productSubView === 'detail') currentPageTitle = 'Catálogo — Detalle de Producto';
+  }
+  if (activeNavId === 'purchase-orders') {
+    if (purchaseOrderSubView === 'new') currentPageTitle = 'Compras — Nueva Orden de Compra';
+    else if (purchaseOrderSubView === 'detail') currentPageTitle = 'Compras — Detalle de Orden';
   }
 
   const renderContent = () => {
@@ -531,8 +674,19 @@ const AppRoot: React.FC = () => {
         userName={activeOwnerName}
         userRole="Dueño"
       >
+        {!isCloudLinked && <LinkAccountBanner onOpenLinkModal={openLinkingModal} />}
         {renderContent()}
       </AppShell>
+      <LinkAccountModal
+        isOpen={isLinkingModalOpen}
+        onClose={closeLinkingModal}
+        localBusinessName={activeBusinessName}
+        localCountryCode={activeCountryCode}
+        localOwnerFirstName={state.owner.firstName}
+        localOwnerLastName={state.owner.lastName}
+        onLinkWithNewAccount={linkExistingLocalBusinessWithNewAccount}
+        onLinkWithExistingAccount={linkExistingLocalBusinessWithExistingAccount}
+      />
       {renderDevTools()}
     </>
   );

@@ -10,17 +10,68 @@ import { repositoryFactory } from '../infrastructure/repositories/RepositoryFact
 import { pinVaultFactory } from '../infrastructure/security/PinVaultFactory';
 import { onboardingRepository } from '../services/onboardingRepository';
 import { resolveEntryRoute, syncBrowserUrl } from '../application/routing/RouteResolver';
+import { CloudAuthService, CloudBusinessMembership, CloudUser, SignUpParams } from '../domain/auth/CloudAuthService';
+import { DeviceEnrollment, DeviceType } from '../domain/auth/DeviceEnrollment';
+import { CloudBusinessLink } from '../domain/auth/CloudBusinessLink';
+import { cloudAuthServiceFactory } from '../infrastructure/cloud/CloudAuthServiceFactory';
+import { DeviceEnrollmentStorage } from '../infrastructure/auth/DeviceEnrollmentStorage';
+import { CloudBusinessLinkStorage } from '../infrastructure/auth/CloudBusinessLinkStorage';
+
+export type AuthStateMachineState =
+  | 'BOOTING'
+  | 'ACCOUNT_REQUIRED'
+  | 'EMAIL_VERIFICATION_REQUIRED'
+  | 'CLOUD_AUTHENTICATED'
+  | 'DEVICE_ENROLLMENT_REQUIRED'
+  | 'PIN_SETUP_REQUIRED'
+  | 'DEVICE_LOCKED'
+  | 'DEVICE_UNLOCKED'
+  | 'CLOUD_CONFIGURATION_ERROR'
+  | 'OFFLINE_NEW_DEVICE';
 
 interface AuthContextType {
+  // Lifecycle & State Machine
   isHydrated: boolean;
   bootStatus: BootStatus;
   bootError?: string;
   retryBoot: () => Promise<void>;
+  authMachineState: AuthStateMachineState;
   onboardingStatus: OnboardingStatus;
   sessionStatus: SessionStatus;
   isCompletionCelebrationActive: boolean;
+
+  // Cloud Identity & Device Enrollment
+  cloudUser: CloudUser | null;
+  cloudMembership: CloudBusinessMembership | null;
+  deviceEnrollment: DeviceEnrollment | null;
+  cloudBusinessLink: CloudBusinessLink | null;
+  isCloudLinked: boolean;
+  pendingEmailForVerification: string;
+
+  // Local Domain State
   state: OnboardingState;
   updateDraftState: (partial: Partial<OnboardingState>) => void;
+  activeBusinessName: string;
+  activeOwnerName: string;
+  activeCountryCode: SupportedCountryCode;
+
+  // Cloud Actions
+  signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  signUpWithEmail: (params: SignUpParams & { businessName: string; countryCode: string }) => Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }>;
+  checkEmailVerified: () => Promise<boolean>;
+  resendVerificationEmail: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  enrollDevice: (params: { deviceName: string; platform: string; deviceType: DeviceType }) => Promise<{ success: boolean; error?: string }>;
+  setupNewDevicePin: (pin: string) => Promise<{ success: boolean; error?: string }>;
+
+  // PC Existing Business Link Actions
+  isLinkingModalOpen: boolean;
+  openLinkingModal: () => void;
+  closeLinkingModal: () => void;
+  linkExistingLocalBusinessWithNewAccount: (params: { firstName: string; lastName: string; email: string; password: string }) => Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }>;
+  linkExistingLocalBusinessWithExistingAccount: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Local PIN & Session
   completeOnboarding: (pin: string) => Promise<{ success: boolean; error?: string }>;
   acknowledgeCompletion: () => void;
   unlockWithPin: (pin: string) => Promise<{ isValid: boolean; error?: string; isLockedOut?: boolean }>;
@@ -28,85 +79,59 @@ interface AuthContextType {
   resetOnboarding: () => void;
   startRegistration: () => void;
   goToLogin: () => void;
+  goToAccountLogin: () => void;
+  goToRegister: () => void;
   switchLocalAccount: () => void;
-  activeBusinessName: string;
-  activeOwnerName: string;
-  activeCountryCode: SupportedCountryCode;
+  signOutCloudAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOverride?: CloudAuthService }> = ({
+  children,
+  cloudServiceOverride,
+}) => {
   const [bootStatus, setBootStatus] = useState<BootStatus>('INITIALIZING');
   const [bootError, setBootError] = useState<string | undefined>(undefined);
+  const [authMachineState, setAuthMachineState] = useState<AuthStateMachineState>('BOOTING');
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus>('incomplete');
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('locked');
-  // Runtime-only UI state for the Step 6 celebration. MUST ALWAYS start false on boot.
   const [isCompletionCelebrationActive, setIsCompletionCelebrationActive] = useState<boolean>(false);
   const [state, setState] = useState<OnboardingState>(() => onboardingRepository.load());
   const { setCountryCode } = useCountry();
+
+  // Cloud state
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [cloudMembership, setCloudMembership] = useState<CloudBusinessMembership | null>(null);
+  const [deviceEnrollment, setDeviceEnrollment] = useState<DeviceEnrollment | null>(() =>
+    DeviceEnrollmentStorage.getEnrollment()
+  );
+  const [cloudBusinessLink, setCloudBusinessLink] = useState<CloudBusinessLink | null>(() =>
+    CloudBusinessLinkStorage.getLink()
+  );
+  const [pendingEmailForVerification, setPendingEmailForVerification] = useState<string>('');
+  const [isLinkingModalOpen, setIsLinkingModalOpen] = useState(false);
 
   const businessRepo = repositoryFactory.getBusinessRepository();
   const userRepo = repositoryFactory.getUserRepository();
   const pinVault = pinVaultFactory.getPinVault();
   const sessionRepo = repositoryFactory.getSessionRepository();
 
-  // Boot Application
+  const getCloudService = useCallback((): CloudAuthService => {
+    if (cloudServiceOverride) return cloudServiceOverride;
+    return cloudAuthServiceFactory.getService();
+  }, [cloudServiceOverride]);
+
+  // Main Boot Process
   const runBoot = useCallback(async () => {
     setBootStatus('INITIALIZING');
     setBootError(undefined);
+    setAuthMachineState('BOOTING');
 
-    const bootService = new BootApplication(databaseManager, businessRepo, userRepo, pinVault, sessionRepo);
-    const result = await bootService.execute();
+    try {
+      const bootService = new BootApplication(databaseManager, businessRepo, userRepo, pinVault, sessionRepo);
+      const result = await bootService.execute();
 
-    if (result.status === 'BOOT_FAILURE') {
-      setBootStatus('BOOT_FAILURE');
-      setBootError(result.error);
-      return;
-    }
-
-    setBootStatus('READY');
-    setOnboardingStatus(result.onboardingStatus);
-    setSessionStatus(result.sessionStatus);
-    // Celebration state MUST remain false on fresh boot
-    setIsCompletionCelebrationActive(false);
-
-    if (result.business && result.owner) {
-      const merged: OnboardingState = {
-        onboardingStatus: 'completed',
-        sessionStatus: result.sessionStatus,
-        currentStep: 1,
-        countryCode: result.business.countryCode,
-        business: {
-          name: result.business.name,
-          fiscalId: result.business.fiscalId || '',
-          phone: result.business.phone || '',
-          phonePrefix: result.business.phonePrefix || '+56',
-          address: result.business.address || '',
-        },
-        regionalSettings: {
-          primaryCurrencyCode: result.settings?.primaryCurrency || 'CLP',
-          secondaryCurrencyCode: result.settings?.secondaryCurrency || undefined,
-          enableSecondaryUSD: result.settings?.secondaryCurrencyEnabled || false,
-          exchangeRateProvider: (result.settings?.exchangeRateProvider as 'BCV' | 'MANUAL') || undefined,
-        },
-        owner: {
-          firstName: result.owner.firstName,
-          lastName: result.owner.lastName || '',
-          email: result.owner.email || '',
-          role: 'Dueño',
-        },
-      };
-      setState(merged);
-      setCountryCode(result.business.countryCode);
-    }
-  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const bootService = new BootApplication(databaseManager, businessRepo, userRepo, pinVault, sessionRepo);
-    bootService.execute().then((result) => {
-      if (!isMounted) return;
       if (result.status === 'BOOT_FAILURE') {
         setBootStatus('BOOT_FAILURE');
         setBootError(result.error);
@@ -147,14 +172,142 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(merged);
         setCountryCode(result.business.countryCode);
       }
-    });
+
+      // Check local storage descriptors
+      const localEnrollment = DeviceEnrollmentStorage.getEnrollment();
+      const localLink = CloudBusinessLinkStorage.getLink();
+      setDeviceEnrollment(localEnrollment);
+      setCloudBusinessLink(localLink);
+
+      // State Machine Resolution:
+      if (localEnrollment) {
+        // Enrolled device: check local session status
+        if (result.sessionStatus === 'unlocked') {
+          setAuthMachineState('DEVICE_UNLOCKED');
+        } else {
+          setAuthMachineState('DEVICE_LOCKED');
+        }
+      } else if (result.onboardingStatus === 'completed' && result.business) {
+        // Existing local business on PC: PIN login or unlocked
+        if (result.sessionStatus === 'unlocked') {
+          setAuthMachineState('DEVICE_UNLOCKED');
+        } else {
+          setAuthMachineState('DEVICE_LOCKED');
+        }
+      } else {
+        // Fresh terminal / new device without local onboarding
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          setAuthMachineState('OFFLINE_NEW_DEVICE');
+        } else {
+          setAuthMachineState('ACCOUNT_REQUIRED');
+        }
+      }
+    } catch (err: unknown) {
+      console.error('Error during boot resolution:', err);
+      const msg = err instanceof Error ? err.message : 'Error inesperado durante arranque.';
+      if (msg === 'CLOUD_AUTH_NOT_CONFIGURED') {
+        setAuthMachineState('CLOUD_CONFIGURATION_ERROR');
+      } else {
+        setBootStatus('BOOT_FAILURE');
+        setBootError(msg);
+      }
+    }
+  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const executeBoot = async () => {
+      try {
+        const bootService = new BootApplication(databaseManager, businessRepo, userRepo, pinVault, sessionRepo);
+        const result = await bootService.execute();
+
+        if (!isMounted) return;
+
+        if (result.status === 'BOOT_FAILURE') {
+          setBootStatus('BOOT_FAILURE');
+          setBootError(result.error);
+          return;
+        }
+
+        setBootStatus('READY');
+        setOnboardingStatus(result.onboardingStatus);
+        setSessionStatus(result.sessionStatus);
+        setIsCompletionCelebrationActive(false);
+
+        if (result.business && result.owner) {
+          const merged: OnboardingState = {
+            onboardingStatus: 'completed',
+            sessionStatus: result.sessionStatus,
+            currentStep: 1,
+            countryCode: result.business.countryCode,
+            business: {
+              name: result.business.name,
+              fiscalId: result.business.fiscalId || '',
+              phone: result.business.phone || '',
+              phonePrefix: result.business.phonePrefix || '+56',
+              address: result.business.address || '',
+            },
+            regionalSettings: {
+              primaryCurrencyCode: result.settings?.primaryCurrency || 'CLP',
+              secondaryCurrencyCode: result.settings?.secondaryCurrency || undefined,
+              enableSecondaryUSD: result.settings?.secondaryCurrencyEnabled || false,
+              exchangeRateProvider: (result.settings?.exchangeRateProvider as 'BCV' | 'MANUAL') || undefined,
+            },
+            owner: {
+              firstName: result.owner.firstName,
+              lastName: result.owner.lastName || '',
+              email: result.owner.email || '',
+              role: 'Dueño',
+            },
+          };
+          setState(merged);
+          setCountryCode(result.business.countryCode);
+        }
+
+        const localEnrollment = DeviceEnrollmentStorage.getEnrollment();
+        const localLink = CloudBusinessLinkStorage.getLink();
+        setDeviceEnrollment(localEnrollment);
+        setCloudBusinessLink(localLink);
+
+        if (localEnrollment) {
+          if (result.sessionStatus === 'unlocked') {
+            setAuthMachineState('DEVICE_UNLOCKED');
+          } else {
+            setAuthMachineState('DEVICE_LOCKED');
+          }
+        } else if (result.onboardingStatus === 'completed' && result.business) {
+          if (result.sessionStatus === 'unlocked') {
+            setAuthMachineState('DEVICE_UNLOCKED');
+          } else {
+            setAuthMachineState('DEVICE_LOCKED');
+          }
+        } else {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setAuthMachineState('OFFLINE_NEW_DEVICE');
+          } else {
+            setAuthMachineState('ACCOUNT_REQUIRED');
+          }
+        }
+      } catch (err: unknown) {
+        if (!isMounted) return;
+        const msg = err instanceof Error ? err.message : 'Error inesperado durante arranque.';
+        if (msg === 'CLOUD_AUTH_NOT_CONFIGURED') {
+          setAuthMachineState('CLOUD_CONFIGURATION_ERROR');
+        } else {
+          setBootStatus('BOOT_FAILURE');
+          setBootError(msg);
+        }
+      }
+    };
+
+    executeBoot();
 
     return () => {
       isMounted = false;
     };
   }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode]);
 
-  // Synchronize browser canonical URL anytime auth/onboarding lifecycle state changes
+  // Synchronize browser canonical URL anytime auth lifecycle state changes
   useEffect(() => {
     const isHydrated = bootStatus === 'READY';
     const targetRoute = resolveEntryRoute({
@@ -182,6 +335,382 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  // Sign In with Email & Password
+  const signInWithEmail = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const user = await cloudService.signInWithPassword(email, pass);
+      setCloudUser(user);
+
+      if (!user.emailConfirmed) {
+        setPendingEmailForVerification(user.email);
+        setAuthMachineState('EMAIL_VERIFICATION_REQUIRED');
+        return { success: true, error: 'Por favor confirma tu correo electrónico antes de continuar.' };
+      }
+
+      // Query memberships
+      const memberships = await cloudService.getMemberships();
+      const ownerMembership = memberships.find((m) => m.role === 'OWNER');
+
+      if (!ownerMembership) {
+        setAuthMachineState('CLOUD_AUTHENTICATED');
+        return { success: true };
+      }
+
+      if (ownerMembership.status === 'INACTIVE') {
+        return { success: false, error: 'Tu membresía de propietario se encuentra inactiva. Contacta soporte.' };
+      }
+
+      if (ownerMembership.status === 'REVOKED') {
+        return { success: false, error: 'Tu acceso como propietario ha sido revocado.' };
+      }
+
+      setCloudMembership(ownerMembership);
+      setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error during signInWithEmail:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Credenciales inválidas.' };
+    }
+  };
+
+  // Sign Up with Email
+  const signUpWithEmail = async (
+    params: SignUpParams & { businessName: string; countryCode: string }
+  ): Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const { user, requiresEmailVerification } = await cloudService.signUp({
+        email: params.email,
+        password: params.password,
+        firstName: params.firstName,
+        lastName: params.lastName,
+      });
+
+      setCloudUser(user);
+      setPendingEmailForVerification(params.email);
+
+      if (requiresEmailVerification) {
+        setAuthMachineState('EMAIL_VERIFICATION_REQUIRED');
+        return { success: true, requiresEmailVerification: true };
+      }
+
+      // If email is pre-confirmed (e.g. dev/test mode), bootstrap business immediately
+      const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
+        firstName: params.firstName,
+        lastName: params.lastName,
+        businessName: params.businessName,
+        countryCode: params.countryCode,
+      });
+
+      setCloudMembership({
+        businessId: bootstrapRes.businessId,
+        businessName: bootstrapRes.businessName,
+        countryCode: bootstrapRes.countryCode,
+        role: bootstrapRes.role,
+        status: 'ACTIVE',
+      });
+
+      setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+      return { success: true, requiresEmailVerification: false };
+    } catch (err: unknown) {
+      console.error('Error during signUpWithEmail:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al registrar cuenta.' };
+    }
+  };
+
+  // Check Email Verification
+  const checkEmailVerified = async (): Promise<boolean> => {
+    try {
+      const cloudService = getCloudService();
+      const isVerified = await cloudService.checkEmailVerified();
+      if (isVerified) {
+        const user = await cloudService.getUser();
+        if (user) {
+          setCloudUser(user);
+          const memberships = await cloudService.getMemberships();
+          const ownerMembership = memberships.find((m) => m.role === 'OWNER');
+          if (ownerMembership && ownerMembership.status === 'ACTIVE') {
+            setCloudMembership(ownerMembership);
+            setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+          } else {
+            setAuthMachineState('CLOUD_AUTHENTICATED');
+          }
+        }
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error checking email verification:', err);
+      return false;
+    }
+  };
+
+  const resendVerificationEmail = async (): Promise<void> => {
+    const cloudService = getCloudService();
+    if (pendingEmailForVerification) {
+      await cloudService.resendVerificationEmail(pendingEmailForVerification);
+    }
+  };
+
+  const sendPasswordReset = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      await cloudService.sendPasswordReset(email);
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Error al enviar restablecimiento.' };
+    }
+  };
+
+  // Enroll Device
+  const enrollDevice = async (params: {
+    deviceName: string;
+    platform: string;
+    deviceType: DeviceType;
+  }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const businessId = cloudMembership?.businessId || cloudBusinessLink?.cloudBusinessId;
+      if (!businessId) {
+        return { success: false, error: 'No se encontró negocio asociado para enrolar el terminal.' };
+      }
+
+      const cloudDevice = await cloudService.enrollDevice({
+        businessId,
+        deviceName: params.deviceName,
+        platform: params.platform,
+        deviceType: params.deviceType,
+      });
+
+      const user = await cloudService.getUser();
+      const enrollment: DeviceEnrollment = {
+        deviceId: cloudDevice.id,
+        cloudBusinessId: cloudDevice.businessId,
+        localBusinessId: state.business.fiscalId || undefined,
+        userId: cloudDevice.userId,
+        accountEmail: user?.email || '',
+        businessName: cloudMembership?.businessName || state.business.name || 'Mi Negocio',
+        displayName: cloudDevice.deviceName,
+        platform: cloudDevice.platform,
+        deviceType: cloudDevice.deviceType,
+        enrolledAt: cloudDevice.createdAt,
+      };
+
+      DeviceEnrollmentStorage.saveEnrollment(enrollment);
+      setDeviceEnrollment(enrollment);
+
+      // If this PC already had local PIN and owner, transition directly to unlocked
+      const owner = await userRepo.getOwnerUser();
+      if (owner) {
+        setSessionStatus('unlocked');
+        setAuthMachineState('DEVICE_UNLOCKED');
+      } else {
+        setAuthMachineState('PIN_SETUP_REQUIRED');
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error enrolling device:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al enrolar dispositivo.' };
+    }
+  };
+
+  // Setup New Device PIN
+  const setupNewDevicePin = async (pin: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // 1. Ensure owner user exists in local database for this device
+      let owner = await userRepo.getOwnerUser();
+      if (!owner) {
+        const business = await businessRepo.getPrimaryBusiness();
+        let businessId = business?.id;
+        if (!businessId) {
+          businessId = 'biz-local-generated';
+          await businessRepo.saveBusinessWithSettings(
+            {
+              id: businessId,
+              name: deviceEnrollment?.businessName || state.business.name || 'Mi Negocio',
+              countryCode: (state.countryCode as SupportedCountryCode) || 'CL',
+              phonePrefix: '+56',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            {
+              businessId,
+              primaryCurrency: (state.regionalSettings.primaryCurrencyCode as import('../types/country').CurrencyCode) || 'CLP',
+              secondaryCurrencyEnabled: false,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          );
+        }
+
+        const newUser = {
+          id: 'usr-local-owner',
+          businessId,
+          role: 'OWNER' as const,
+          firstName: state.owner.firstName || 'Propietario',
+          lastName: state.owner.lastName || '',
+          email: deviceEnrollment?.accountEmail || cloudUser?.email || '',
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        await userRepo.saveUser(newUser);
+        owner = newUser;
+      }
+
+      // 2. Save PIN in Vault
+      await pinVault.savePinCredential(owner.id, pin);
+
+      // 3. Mark session unlocked
+      await sessionRepo.saveSession({
+        status: 'unlocked',
+        unlockedUserId: owner.id,
+        unlockedAt: new Date().toISOString(),
+      });
+
+      setOnboardingStatus('completed');
+      setSessionStatus('unlocked');
+      setAuthMachineState('DEVICE_UNLOCKED');
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error setting up PIN:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al configurar PIN.' };
+    }
+  };
+
+  // Link Existing Local Business (PC Migration)
+  const linkExistingLocalBusinessWithNewAccount = async (params: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+  }): Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const localBiz = await businessRepo.getPrimaryBusiness();
+      const localName = localBiz?.name || state.business.name || 'Mi Negocio';
+      const localCountry = localBiz?.countryCode || state.countryCode || 'CL';
+
+      const { user, requiresEmailVerification } = await cloudService.signUp({
+        email: params.email,
+        password: params.password,
+        firstName: params.firstName,
+        lastName: params.lastName,
+      });
+
+      setCloudUser(user);
+      setPendingEmailForVerification(params.email);
+
+      if (requiresEmailVerification) {
+        setAuthMachineState('EMAIL_VERIFICATION_REQUIRED');
+        return { success: true, requiresEmailVerification: true };
+      }
+
+      const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
+        firstName: params.firstName,
+        lastName: params.lastName,
+        businessName: localName,
+        countryCode: localCountry,
+      });
+
+      // Save local -> cloud link descriptor
+      const link: CloudBusinessLink = {
+        localBusinessId: localBiz?.id || 'local-primary',
+        cloudBusinessId: bootstrapRes.businessId,
+        cloudUserId: bootstrapRes.userId,
+        linkedAt: new Date().toISOString(),
+      };
+      CloudBusinessLinkStorage.saveLink(link);
+      setCloudBusinessLink(link);
+
+      // Enroll PC
+      const cloudDevice = await cloudService.enrollDevice({
+        businessId: bootstrapRes.businessId,
+        deviceName: 'Caja Principal (PC)',
+        platform: 'Desktop',
+        deviceType: 'DESKTOP',
+      });
+
+      const enrollment: DeviceEnrollment = {
+        deviceId: cloudDevice.id,
+        cloudBusinessId: cloudDevice.businessId,
+        localBusinessId: localBiz?.id,
+        userId: cloudDevice.userId,
+        accountEmail: user?.email || params.email,
+        businessName: localName,
+        displayName: cloudDevice.deviceName,
+        platform: cloudDevice.platform,
+        deviceType: cloudDevice.deviceType,
+        enrolledAt: cloudDevice.createdAt,
+      };
+      DeviceEnrollmentStorage.saveEnrollment(enrollment);
+      setDeviceEnrollment(enrollment);
+
+      return { success: true, requiresEmailVerification: false };
+    } catch (err: unknown) {
+      console.error('Error linking existing business with new account:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al vincular cuenta.' };
+    }
+  };
+
+  const linkExistingLocalBusinessWithExistingAccount = async (
+    email: string,
+    pass: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const localBiz = await businessRepo.getPrimaryBusiness();
+      const user = await cloudService.signInWithPassword(email, pass);
+      setCloudUser(user);
+
+      const memberships = await cloudService.getMemberships();
+      const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
+
+      if (!ownerMembership) {
+        return { success: false, error: 'No se encontró una membresía activa de propietario en esta cuenta.' };
+      }
+
+      const link: CloudBusinessLink = {
+        localBusinessId: localBiz?.id || 'local-primary',
+        cloudBusinessId: ownerMembership.businessId,
+        cloudUserId: user.id,
+        linkedAt: new Date().toISOString(),
+      };
+      CloudBusinessLinkStorage.saveLink(link);
+      setCloudBusinessLink(link);
+
+      const cloudDevice = await cloudService.enrollDevice({
+        businessId: ownerMembership.businessId,
+        deviceName: 'Caja Principal (PC)',
+        platform: 'Desktop',
+        deviceType: 'DESKTOP',
+      });
+
+      const enrollment: DeviceEnrollment = {
+        deviceId: cloudDevice.id,
+        cloudBusinessId: cloudDevice.businessId,
+        localBusinessId: localBiz?.id,
+        userId: cloudDevice.userId,
+        accountEmail: user.email,
+        businessName: ownerMembership.businessName,
+        displayName: cloudDevice.deviceName,
+        platform: cloudDevice.platform,
+        deviceType: cloudDevice.deviceType,
+        enrolledAt: cloudDevice.createdAt,
+      };
+      DeviceEnrollmentStorage.saveEnrollment(enrollment);
+      setDeviceEnrollment(enrollment);
+
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error linking existing business with existing account:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al vincular cuenta existente.' };
+    }
+  };
+
+  // Local Initial Setup Completion
   const completeOnboarding = async (pin: string): Promise<{ success: boolean; error?: string }> => {
     const setupService = new CompleteInitialSetup(businessRepo, userRepo, pinVault);
     const result = await setupService.execute({
@@ -213,6 +742,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setOnboardingStatus('completed');
     setSessionStatus('locked');
+    setAuthMachineState('DEVICE_LOCKED');
     setIsCompletionCelebrationActive(true);
 
     const updated: OnboardingState = {
@@ -237,7 +767,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const result = await verifyService.execute(pin);
 
     if (result.isValid) {
-      // Save ephemeral session to SessionRepository (sessionStorage in browser, process memory in Tauri)
       await sessionRepo.saveSession({
         status: 'unlocked',
         unlockedUserId: result.userId || 'primary-user',
@@ -245,6 +774,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       setSessionStatus('unlocked');
+      setAuthMachineState('DEVICE_UNLOCKED');
       const updated: OnboardingState = {
         ...state,
         sessionStatus: 'unlocked',
@@ -259,6 +789,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lockSession = () => {
     sessionRepo.clearSession().catch(() => {});
     setSessionStatus('locked');
+    setAuthMachineState('DEVICE_LOCKED');
     const updated: OnboardingState = {
       ...state,
       sessionStatus: 'locked',
@@ -272,10 +803,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     businessRepo.resetAll().catch(() => {});
     userRepo.resetAll().catch(() => {});
     pinVault.resetVault().catch(() => {});
+    DeviceEnrollmentStorage.clearEnrollment();
+    CloudBusinessLinkStorage.clearLink();
     const fresh = onboardingRepository.reset();
     setState(fresh);
     setOnboardingStatus('incomplete');
     setSessionStatus('locked');
+    setAuthMachineState('ACCOUNT_REQUIRED');
     setIsCompletionCelebrationActive(false);
   };
 
@@ -283,32 +817,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsCompletionCelebrationActive(false);
     setOnboardingStatus('incomplete');
     setSessionStatus('locked');
+    setAuthMachineState('ACCOUNT_REQUIRED');
     updateDraftState({ onboardingStatus: 'incomplete', sessionStatus: 'locked', currentStep: 1 });
   };
 
   const goToLogin = () => {
     setIsCompletionCelebrationActive(false);
-    setOnboardingStatus('completed');
     setSessionStatus('locked');
+    setAuthMachineState('DEVICE_LOCKED');
     updateDraftState({ onboardingStatus: 'completed', sessionStatus: 'locked' });
+  };
+
+  const goToAccountLogin = () => {
+    setAuthMachineState('ACCOUNT_REQUIRED');
+  };
+
+  const goToRegister = () => {
+    setAuthMachineState('CLOUD_AUTHENTICATED');
   };
 
   const switchLocalAccount = () => {
     sessionRepo.clearSession().catch(() => {});
     setSessionStatus('locked');
-    const updated: OnboardingState = {
-      ...state,
-      sessionStatus: 'locked',
-    };
-    setState(updated);
-    onboardingRepository.save(updated);
+    setAuthMachineState('DEVICE_LOCKED');
   };
 
-  const activeBusinessName = state.business.name || 'Mi Negocio';
+  const signOutCloudAccount = async () => {
+    try {
+      const cloudService = getCloudService();
+      await cloudService.signOut();
+    } catch {
+      // Ignore network errors on sign out
+    }
+    setCloudUser(null);
+    setCloudMembership(null);
+    setAuthMachineState('ACCOUNT_REQUIRED');
+  };
+
+  const activeBusinessName = deviceEnrollment?.businessName || state.business.name || 'Mi Negocio';
   const activeOwnerName = state.owner.firstName
     ? `${state.owner.firstName} ${state.owner.lastName || ''}`.trim()
     : 'Usuario';
-  const activeCountryCode = state.countryCode || 'CL';
+  const activeCountryCode = (state.countryCode as SupportedCountryCode) || 'CL';
 
   return (
     <AuthContext.Provider
@@ -317,11 +867,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bootStatus,
         bootError,
         retryBoot: runBoot,
+        authMachineState,
         onboardingStatus,
         sessionStatus,
         isCompletionCelebrationActive,
+        cloudUser,
+        cloudMembership,
+        deviceEnrollment,
+        cloudBusinessLink,
+        isCloudLinked: !!cloudBusinessLink,
+        pendingEmailForVerification,
         state,
         updateDraftState,
+        activeBusinessName,
+        activeOwnerName,
+        activeCountryCode,
+        signInWithEmail,
+        signUpWithEmail,
+        checkEmailVerified,
+        resendVerificationEmail,
+        sendPasswordReset,
+        enrollDevice,
+        setupNewDevicePin,
+        isLinkingModalOpen,
+        openLinkingModal: () => setIsLinkingModalOpen(true),
+        closeLinkingModal: () => setIsLinkingModalOpen(false),
+        linkExistingLocalBusinessWithNewAccount,
+        linkExistingLocalBusinessWithExistingAccount,
         completeOnboarding,
         acknowledgeCompletion,
         unlockWithPin,
@@ -329,10 +901,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetOnboarding,
         startRegistration,
         goToLogin,
+        goToAccountLogin,
+        goToRegister,
         switchLocalAccount,
-        activeBusinessName,
-        activeOwnerName,
-        activeCountryCode,
+        signOutCloudAccount,
       }}
     >
       {children}
