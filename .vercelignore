@@ -1,7 +1,11 @@
-node_modules
-target
-src-tauri
-scratch
-*.png
 .git
+node_modules
+src-tauri/target
+target
+*.sqlite
+*.sqlite3
+*.db
+.env.local
+.env.*.local
+scratch
 .puppeteer-test-profile
