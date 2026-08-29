@@ -43,7 +43,7 @@ target/
 # Temporary test profiles & Root screenshots
 .puppeteer-test-profile/
 scratch/
-/*.png
+!src/assets/**
 
 .vercel
 supabase/.temp/
