@@ -20,8 +20,10 @@ import { CloudBusinessLinkStorage } from '../infrastructure/auth/CloudBusinessLi
 export type AuthStateMachineState =
   | 'BOOTING'
   | 'ACCOUNT_REQUIRED'
+  | 'REGISTER_REQUIRED'
   | 'EMAIL_VERIFICATION_REQUIRED'
-  | 'CLOUD_AUTHENTICATED'
+  | 'BUSINESS_SETUP_REQUIRED'
+  | 'EXISTING_LOCAL_BUSINESS_LINK_REQUIRED'
   | 'DEVICE_ENROLLMENT_REQUIRED'
   | 'PIN_SETUP_REQUIRED'
   | 'DEVICE_LOCKED'
@@ -58,6 +60,7 @@ interface AuthContextType {
   // Cloud Actions
   signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signUpWithEmail: (params: SignUpParams & { businessName: string; countryCode: string }) => Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }>;
+  setupCloudBusiness: (params: { businessName: string; countryCode: string }) => Promise<{ success: boolean; error?: string }>;
   checkEmailVerified: () => Promise<boolean>;
   resendVerificationEmail: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -68,6 +71,7 @@ interface AuthContextType {
   isLinkingModalOpen: boolean;
   openLinkingModal: () => void;
   closeLinkingModal: () => void;
+  linkExistingLocalBusiness: () => Promise<{ success: boolean; error?: string }>;
   linkExistingLocalBusinessWithNewAccount: (params: { firstName: string; lastName: string; email: string; password: string }) => Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }>;
   linkExistingLocalBusinessWithExistingAccount: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
 
@@ -110,6 +114,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     CloudBusinessLinkStorage.getLink()
   );
   const [pendingEmailForVerification, setPendingEmailForVerification] = useState<string>('');
+  const [pendingDraftBusinessName, setPendingDraftBusinessName] = useState<string>('');
+  const [pendingDraftCountryCode, setPendingDraftCountryCode] = useState<string>('CL');
+  const [pendingDraftOwnerFirstName, setPendingDraftOwnerFirstName] = useState<string>('');
+  const [pendingDraftOwnerLastName, setPendingDraftOwnerLastName] = useState<string>('');
   const [isLinkingModalOpen, setIsLinkingModalOpen] = useState(false);
 
   const businessRepo = repositoryFactory.getBusinessRepository();
@@ -312,13 +320,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     const isHydrated = bootStatus === 'READY';
     const targetRoute = resolveEntryRoute({
       isHydrated,
+      authMachineState,
       onboardingStatus,
       sessionStatus,
       isCompletionCelebrationActive,
       requestedPath: typeof window !== 'undefined' ? window.location.pathname : undefined,
     });
     syncBrowserUrl(targetRoute);
-  }, [bootStatus, onboardingStatus, sessionStatus, isCompletionCelebrationActive]);
+  }, [bootStatus, authMachineState, onboardingStatus, sessionStatus, isCompletionCelebrationActive]);
 
   // Keep country context in sync with draft changes
   useEffect(() => {
@@ -345,7 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       if (!user.emailConfirmed) {
         setPendingEmailForVerification(user.email);
         setAuthMachineState('EMAIL_VERIFICATION_REQUIRED');
-        return { success: true, error: 'Por favor confirma tu correo electrónico antes de continuar.' };
+        return { success: false, error: 'Por favor confirma tu correo electrónico antes de continuar.' };
       }
 
       // Query memberships
@@ -353,7 +362,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       const ownerMembership = memberships.find((m) => m.role === 'OWNER');
 
       if (!ownerMembership) {
-        setAuthMachineState('CLOUD_AUTHENTICATED');
+        // Authenticated user with confirmed email, but no business created yet in Cloud DB
+        const localBiz = await businessRepo.getPrimaryBusiness();
+        const hasLocalBusiness = (localBiz != null && localBiz.name.trim().length > 0) || (state.business.name.trim().length > 0);
+        const localLink = CloudBusinessLinkStorage.getLink();
+
+        if (hasLocalBusiness && !localLink) {
+          setAuthMachineState('EXISTING_LOCAL_BUSINESS_LINK_REQUIRED');
+        } else {
+          setAuthMachineState('BUSINESS_SETUP_REQUIRED');
+        }
         return { success: true };
       }
 
@@ -366,20 +384,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       }
 
       setCloudMembership(ownerMembership);
-      setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+
+      // Check if this specific physical device is already enrolled
+      const currentEnrollment = DeviceEnrollmentStorage.getEnrollment();
+      if (currentEnrollment && currentEnrollment.cloudBusinessId === ownerMembership.businessId) {
+        // Device is already enrolled
+        setAuthMachineState('DEVICE_LOCKED');
+      } else {
+        setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+      }
+
       return { success: true };
     } catch (err: unknown) {
       console.error('Error during signInWithEmail:', err);
-      return { success: false, error: err instanceof Error ? err.message : 'Credenciales inválidas.' };
+      return { success: false, error: err instanceof Error ? err.message : 'Correo o contraseña incorrectos.' };
     }
   };
 
-  // Sign Up with Email
+  // Sign Up with Email & Password
   const signUpWithEmail = async (
     params: SignUpParams & { businessName: string; countryCode: string }
   ): Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }> => {
     try {
       const cloudService = getCloudService();
+
+      // Store pending business draft for post-confirmation bootstrap
+      setPendingDraftBusinessName(params.businessName.trim());
+      setPendingDraftCountryCode(params.countryCode || 'CL');
+      setPendingDraftOwnerFirstName(params.firstName.trim());
+      setPendingDraftOwnerLastName(params.lastName ? params.lastName.trim() : '');
+
       const { user, requiresEmailVerification } = await cloudService.signUp({
         email: params.email,
         password: params.password,
@@ -390,12 +424,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       setCloudUser(user);
       setPendingEmailForVerification(params.email);
 
-      if (requiresEmailVerification) {
+      if (requiresEmailVerification || !user?.emailConfirmed) {
         setAuthMachineState('EMAIL_VERIFICATION_REQUIRED');
         return { success: true, requiresEmailVerification: true };
       }
 
-      // If email is pre-confirmed (e.g. dev/test mode), bootstrap business immediately
+      // If email is pre-confirmed (e.g. dev mode), bootstrap business immediately
       const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
         firstName: params.firstName,
         lastName: params.lastName,
@@ -419,27 +453,85 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     }
   };
 
+  // Setup Cloud Business (for confirmed authenticated users without business)
+  const setupCloudBusiness = async (params: {
+    businessName: string;
+    countryCode: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const user = await cloudService.getUser();
+      if (!user) {
+        setAuthMachineState('ACCOUNT_REQUIRED');
+        return { success: false, error: 'Sesión no válida. Inicia sesión nuevamente.' };
+      }
+
+      const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
+        firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
+        lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
+        businessName: params.businessName.trim(),
+        countryCode: params.countryCode || 'CL',
+      });
+
+      const membership: CloudBusinessMembership = {
+        businessId: bootstrapRes.businessId,
+        businessName: bootstrapRes.businessName,
+        countryCode: bootstrapRes.countryCode,
+        role: bootstrapRes.role,
+        status: 'ACTIVE',
+      };
+
+      setCloudMembership(membership);
+      setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error setting up cloud business:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al configurar negocio cloud.' };
+    }
+  };
+
   // Check Email Verification
   const checkEmailVerified = async (): Promise<boolean> => {
     try {
       const cloudService = getCloudService();
       const isVerified = await cloudService.checkEmailVerified();
-      if (isVerified) {
-        const user = await cloudService.getUser();
-        if (user) {
-          setCloudUser(user);
-          const memberships = await cloudService.getMemberships();
-          const ownerMembership = memberships.find((m) => m.role === 'OWNER');
-          if (ownerMembership && ownerMembership.status === 'ACTIVE') {
-            setCloudMembership(ownerMembership);
-            setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
-          } else {
-            setAuthMachineState('CLOUD_AUTHENTICATED');
-          }
-        }
-        return true;
+      if (!isVerified) {
+        return false;
       }
-      return false;
+
+      const user = await cloudService.getUser();
+      if (user) {
+        setCloudUser(user);
+        const memberships = await cloudService.getMemberships();
+        const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
+
+        if (ownerMembership) {
+          setCloudMembership(ownerMembership);
+          setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+        } else if (pendingDraftBusinessName) {
+          // Auto-bootstrap using draft provided at signup
+          const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
+            firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
+            lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
+            businessName: pendingDraftBusinessName,
+            countryCode: pendingDraftCountryCode,
+          });
+
+          setCloudMembership({
+            businessId: bootstrapRes.businessId,
+            businessName: bootstrapRes.businessName,
+            countryCode: bootstrapRes.countryCode,
+            role: bootstrapRes.role,
+            status: 'ACTIVE',
+          });
+
+          setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+        } else {
+          // Prompt user to name their business
+          setAuthMachineState('BUSINESS_SETUP_REQUIRED');
+        }
+      }
+      return true;
     } catch (err) {
       console.error('Error checking email verification:', err);
       return false;
@@ -519,7 +611,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   // Setup New Device PIN
   const setupNewDevicePin = async (pin: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // 1. Ensure owner user exists in local database for this device
       let owner = await userRepo.getOwnerUser();
       if (!owner) {
         const business = await businessRepo.getPrimaryBusiness();
@@ -560,10 +651,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         owner = newUser;
       }
 
-      // 2. Save PIN in Vault
+      // Save PIN in Vault
       await pinVault.savePinCredential(owner.id, pin);
 
-      // 3. Mark session unlocked
+      // Mark session unlocked
       await sessionRepo.saveSession({
         status: 'unlocked',
         unlockedUserId: owner.id,
@@ -577,6 +668,86 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     } catch (err: unknown) {
       console.error('Error setting up PIN:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Error al configurar PIN.' };
+    }
+  };
+
+  // Link Existing Local Business (Official Bootstrap on already authenticated PC)
+  const linkExistingLocalBusiness = async (): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const user = await cloudService.getUser();
+      if (!user) {
+        setAuthMachineState('ACCOUNT_REQUIRED');
+        return { success: false, error: 'Sesión no válida. Inicia sesión nuevamente.' };
+      }
+
+      const localBiz = await businessRepo.getPrimaryBusiness();
+      const localName = localBiz?.name || state.business.name || 'Mi Negocio';
+      const localCountry = localBiz?.countryCode || state.countryCode || 'CL';
+      const localOwner = await userRepo.getOwnerUser();
+      const firstName = localOwner?.firstName || state.owner.firstName || 'Propietario';
+      const lastName = localOwner?.lastName || state.owner.lastName || '';
+
+      const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
+        firstName,
+        lastName,
+        businessName: localName,
+        countryCode: localCountry,
+      });
+
+      // Save local -> cloud link descriptor
+      const link: CloudBusinessLink = {
+        localBusinessId: localBiz?.id || state.business.fiscalId || 'local-primary',
+        cloudBusinessId: bootstrapRes.businessId,
+        cloudUserId: bootstrapRes.userId,
+        linkedAt: new Date().toISOString(),
+      };
+      CloudBusinessLinkStorage.saveLink(link);
+      setCloudBusinessLink(link);
+
+      // Enroll PC
+      const cloudDevice = await cloudService.enrollDevice({
+        businessId: bootstrapRes.businessId,
+        deviceName: 'Caja Principal (PC)',
+        platform: 'Windows Desktop',
+        deviceType: 'DESKTOP',
+      });
+
+      const enrollment: DeviceEnrollment = {
+        deviceId: cloudDevice.id,
+        cloudBusinessId: cloudDevice.businessId,
+        localBusinessId: localBiz?.id || state.business.fiscalId,
+        userId: cloudDevice.userId,
+        accountEmail: user.email,
+        businessName: localName,
+        displayName: cloudDevice.deviceName,
+        platform: cloudDevice.platform,
+        deviceType: cloudDevice.deviceType,
+        enrolledAt: cloudDevice.createdAt,
+      };
+      DeviceEnrollmentStorage.saveEnrollment(enrollment);
+      setDeviceEnrollment(enrollment);
+
+      setCloudMembership({
+        businessId: bootstrapRes.businessId,
+        businessName: bootstrapRes.businessName,
+        countryCode: bootstrapRes.countryCode,
+        role: bootstrapRes.role,
+        status: 'ACTIVE',
+      });
+
+      // If this PC already had local PIN and owner, transition directly to unlocked or locked
+      if (localOwner) {
+        setSessionStatus('unlocked');
+        setAuthMachineState('DEVICE_UNLOCKED');
+      } else {
+        setAuthMachineState('PIN_SETUP_REQUIRED');
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error linking existing local business:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Error al vincular negocio local.' };
     }
   };
 
@@ -799,25 +970,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   };
 
   const resetOnboarding = () => {
-    sessionRepo.clearSession().catch(() => {});
-    businessRepo.resetAll().catch(() => {});
-    userRepo.resetAll().catch(() => {});
-    pinVault.resetVault().catch(() => {});
-    DeviceEnrollmentStorage.clearEnrollment();
-    CloudBusinessLinkStorage.clearLink();
-    const fresh = onboardingRepository.reset();
-    setState(fresh);
+    onboardingRepository.reset();
+    setState(onboardingRepository.load());
+    setIsCompletionCelebrationActive(false);
     setOnboardingStatus('incomplete');
     setSessionStatus('locked');
     setAuthMachineState('ACCOUNT_REQUIRED');
-    setIsCompletionCelebrationActive(false);
   };
 
   const startRegistration = () => {
-    setIsCompletionCelebrationActive(false);
-    setOnboardingStatus('incomplete');
-    setSessionStatus('locked');
-    setAuthMachineState('ACCOUNT_REQUIRED');
     updateDraftState({ onboardingStatus: 'incomplete', sessionStatus: 'locked', currentStep: 1 });
   };
 
@@ -833,13 +994,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   };
 
   const goToRegister = () => {
-    setAuthMachineState('CLOUD_AUTHENTICATED');
+    setAuthMachineState('REGISTER_REQUIRED');
   };
 
   const switchLocalAccount = () => {
     sessionRepo.clearSession().catch(() => {});
     setSessionStatus('locked');
-    setAuthMachineState('DEVICE_LOCKED');
+    setAuthMachineState('ACCOUNT_REQUIRED');
   };
 
   const signOutCloudAccount = async () => {
@@ -884,6 +1045,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         activeCountryCode,
         signInWithEmail,
         signUpWithEmail,
+        setupCloudBusiness,
         checkEmailVerified,
         resendVerificationEmail,
         sendPasswordReset,
@@ -892,6 +1054,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         isLinkingModalOpen,
         openLinkingModal: () => setIsLinkingModalOpen(true),
         closeLinkingModal: () => setIsLinkingModalOpen(false),
+        linkExistingLocalBusiness,
         linkExistingLocalBusinessWithNewAccount,
         linkExistingLocalBusinessWithExistingAccount,
         completeOnboarding,

@@ -2,6 +2,9 @@ export type AppRoute =
   | 'loading'
   | '/register'
   | '/login'
+  | '/verify-email'
+  | '/setup-business'
+  | '/enroll-device'
   | '/dashboard'
   | '/pos'
   | '/sales'
@@ -23,16 +26,10 @@ export type AppRoute =
 
 export interface RouteResolutionState {
   isHydrated: boolean;
-  onboardingStatus: 'incomplete' | 'completed';
-  sessionStatus: 'locked' | 'unlocked';
-  /**
-   * Runtime-only UI state for the first-run celebration (Step 6).
-   * MUST ALWAYS be false on fresh boot and MUST NEVER be persisted or hydrated.
-   */
+  authMachineState?: string;
+  onboardingStatus?: 'incomplete' | 'completed';
+  sessionStatus?: 'locked' | 'unlocked';
   isCompletionCelebrationActive?: boolean;
-  /**
-   * The requested URL pathname (e.g., from deep link or browser reload).
-   */
   requestedPath?: string;
 }
 
@@ -100,36 +97,61 @@ export function normalizeProtectedPath(rawPath?: string | null): AppRoute | null
 }
 
 /**
- * Single source of truth for resolving entry routes based on authentication & onboarding state.
+ * Single source of truth for resolving entry routes based on authentication & machine state.
  *
  * Invariants:
  * 1. !isHydrated -> 'loading'
- * 2. isCompletionCelebrationActive === true -> '/register' (ephemeral celebration only during current active session)
- * 3. onboardingStatus === 'incomplete' -> '/register'
- * 4. onboardingStatus === 'completed' && sessionStatus === 'locked' -> '/login' (NEVER /register or Step 6 on fresh boot)
- * 5. onboardingStatus === 'completed' && sessionStatus === 'unlocked' -> requested protected route or '/dashboard'
+ * 2. Explicit authMachineState takes priority when provided (Cloud Identity).
+ * 3. isCompletionCelebrationActive === true -> '/register'
+ * 4. onboardingStatus === 'incomplete' -> '/register' (legacy local test harness)
+ * 5. sessionStatus === 'locked' -> '/login'
+ * 6. sessionStatus === 'unlocked' -> requested protected route or '/dashboard'
  */
 export function resolveEntryRoute(state: RouteResolutionState): AppRoute {
   if (!state.isHydrated) {
     return 'loading';
   }
 
-  // Active runtime-only Step 6 celebration in the current session
+  // 1. Explicit Auth Machine State (Cloud Identity) takes priority if provided
+  if (state.authMachineState) {
+    switch (state.authMachineState) {
+      case 'REGISTER_REQUIRED':
+        return '/register';
+      case 'EMAIL_VERIFICATION_REQUIRED':
+        return '/verify-email';
+      case 'BUSINESS_SETUP_REQUIRED':
+      case 'EXISTING_LOCAL_BUSINESS_LINK_REQUIRED':
+        return '/setup-business';
+      case 'DEVICE_ENROLLMENT_REQUIRED':
+        return '/enroll-device';
+      case 'DEVICE_UNLOCKED': {
+        const preservedRoute = normalizeProtectedPath(state.requestedPath);
+        return preservedRoute || '/dashboard';
+      }
+      case 'ACCOUNT_REQUIRED':
+      case 'DEVICE_LOCKED':
+      case 'PIN_SETUP_REQUIRED':
+      default:
+        return '/login';
+    }
+  }
+
+  // 2. Active runtime-only Step 6 celebration in the current session
   if (state.isCompletionCelebrationActive === true) {
     return '/register';
   }
 
-  // If onboarding has never been completed
+  // 3. Local onboarding status if incomplete (Local-first test harness)
   if (state.onboardingStatus === 'incomplete') {
     return '/register';
   }
 
-  // Configured installation: if locked, strictly /login
+  // 4. Configured installation: if locked, strictly /login
   if (state.sessionStatus === 'locked') {
     return '/login';
   }
 
-  // Configured installation: if unlocked, preserve valid protected deep-link / reload route
+  // 5. Configured installation: if unlocked, preserve valid protected deep-link / reload route
   const preservedRoute = normalizeProtectedPath(state.requestedPath);
   if (preservedRoute) {
     return preservedRoute;

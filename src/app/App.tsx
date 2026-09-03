@@ -10,6 +10,8 @@ import { PinLoginPage } from '../features/auth/PinLoginPage';
 import { AccountLoginPage } from '../features/auth/AccountLoginPage';
 import { RegisterAccountPage } from '../features/auth/RegisterAccountPage';
 import { VerifyEmailPage } from '../features/auth/VerifyEmailPage';
+import { BusinessSetupPage } from '../features/auth/BusinessSetupPage';
+import { ExistingLocalBusinessLinkPage } from '../features/auth/ExistingLocalBusinessLinkPage';
 import { DeviceEnrollmentPage } from '../features/auth/DeviceEnrollmentPage';
 import { SetupPinModal } from '../features/auth/SetupPinModal';
 import { LinkAccountModal } from '../features/auth/LinkAccountModal';
@@ -18,7 +20,7 @@ import { ErrorBoundary } from '../components/errors/ErrorBoundary';
 import { DatabaseBootErrorScreen } from '../components/errors/DatabaseBootErrorScreen';
 import { DiagnosticsModal } from '../components/dev/DiagnosticsModal';
 import { ScannerSimulatorModal } from '../components/dev/ScannerSimulatorModal';
-import { syncBrowserUrl, normalizeProtectedPath, AppRoute } from '../application/routing/RouteResolver';
+import { syncBrowserUrl, normalizeProtectedPath, resolveEntryRoute, AppRoute } from '../application/routing/RouteResolver';
 import { Activity, WifiOff, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 
@@ -175,11 +177,13 @@ const AppRoot: React.FC = () => {
     activeBusinessName,
     activeOwnerName,
     activeCountryCode,
+    cloudUser,
     cloudMembership,
     isCloudLinked,
     pendingEmailForVerification,
     signInWithEmail,
     signUpWithEmail,
+    setupCloudBusiness,
     checkEmailVerified,
     resendVerificationEmail,
     sendPasswordReset,
@@ -188,11 +192,14 @@ const AppRoot: React.FC = () => {
     isLinkingModalOpen,
     openLinkingModal,
     closeLinkingModal,
+    linkExistingLocalBusiness,
     linkExistingLocalBusinessWithNewAccount,
     linkExistingLocalBusinessWithExistingAccount,
     lockSession,
     goToAccountLogin,
     goToRegister,
+    signOutCloudAccount,
+    sessionStatus,
     state,
   } = useAuth();
 
@@ -239,26 +246,22 @@ const AppRoot: React.FC = () => {
 
   // Synchronize browser URL based on active navigation and auth machine state
   useEffect(() => {
-    if (!isHydrated) {
-      syncBrowserUrl('loading');
-      return;
-    }
-
-    if (authMachineState === 'ACCOUNT_REQUIRED' || authMachineState === 'DEVICE_LOCKED') {
-      syncBrowserUrl('/login');
-      return;
-    }
-
-    if (authMachineState === 'CLOUD_AUTHENTICATED' || isCompletionCelebrationActive || onboardingStatus === 'incomplete') {
-      syncBrowserUrl('/register');
-      return;
-    }
+    const targetRoute = resolveEntryRoute({
+      isHydrated,
+      authMachineState,
+      onboardingStatus,
+      sessionStatus,
+      isCompletionCelebrationActive,
+      requestedPath: typeof window !== 'undefined' ? window.location.pathname : undefined,
+    });
 
     if (authMachineState === 'DEVICE_UNLOCKED') {
-      const targetRoute = getCanonicalPathForNavId(activeNavId);
+      const targetNavRoute = getCanonicalPathForNavId(activeNavId);
+      syncBrowserUrl(targetNavRoute);
+    } else {
       syncBrowserUrl(targetRoute);
     }
-  }, [isHydrated, authMachineState, isCompletionCelebrationActive, onboardingStatus, activeNavId]);
+  }, [isHydrated, authMachineState, isCompletionCelebrationActive, onboardingStatus, sessionStatus, activeNavId]);
 
   const handleNavigateNav = (navId: string) => {
     if (navId.startsWith('/customers/')) {
@@ -384,7 +387,7 @@ const AppRoot: React.FC = () => {
   }
 
   // 6. Registration Page
-  if (authMachineState === 'CLOUD_AUTHENTICATED') {
+  if (authMachineState === 'REGISTER_REQUIRED') {
     return (
       <>
         <RegisterAccountPage
@@ -407,6 +410,38 @@ const AppRoot: React.FC = () => {
           onCheckVerification={checkEmailVerified}
           onResendEmail={resendVerificationEmail}
           onBackToLogin={goToAccountLogin}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 8. Existing Local Business Link Required (Authenticated user with existing PC business)
+  if (authMachineState === 'EXISTING_LOCAL_BUSINESS_LINK_REQUIRED') {
+    return (
+      <>
+        <ExistingLocalBusinessLinkPage
+          userEmail={cloudUser?.email || ''}
+          localBusinessName={state.business.name}
+          localCountryCode={state.countryCode}
+          onLinkBusiness={linkExistingLocalBusiness}
+          onSignOut={signOutCloudAccount}
+        />
+        {renderDevTools()}
+      </>
+    );
+  }
+
+  // 9. Business Setup Required (Authenticated user without existing business)
+  if (authMachineState === 'BUSINESS_SETUP_REQUIRED') {
+    return (
+      <>
+        <BusinessSetupPage
+          userEmail={cloudUser?.email || ''}
+          defaultBusinessName={state.business.name}
+          defaultCountryCode={state.countryCode}
+          onSetupBusiness={setupCloudBusiness}
+          onSignOut={signOutCloudAccount}
         />
         {renderDevTools()}
       </>
