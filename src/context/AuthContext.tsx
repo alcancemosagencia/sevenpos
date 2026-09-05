@@ -592,6 +592,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       DeviceEnrollmentStorage.saveEnrollment(enrollment);
       setDeviceEnrollment(enrollment);
 
+      // Persist CloudBusinessLink for the enrolled terminal so banner and link status are immediately synchronized
+      const link: CloudBusinessLink = {
+        localBusinessId: enrollment.localBusinessId || cloudDevice.businessId,
+        cloudBusinessId: cloudDevice.businessId,
+        cloudUserId: cloudDevice.userId,
+        linkedAt: cloudDevice.createdAt,
+      };
+      CloudBusinessLinkStorage.saveLink(link);
+      setCloudBusinessLink(link);
+
       // If this PC already had local PIN and owner, transition directly to unlocked
       const owner = await userRepo.getOwnerUser();
       if (owner) {
@@ -1036,7 +1046,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         cloudMembership,
         deviceEnrollment,
         cloudBusinessLink,
-        isCloudLinked: !!cloudBusinessLink,
+        isCloudLinked: Boolean(
+          cloudBusinessLink ||
+            deviceEnrollment ||
+            (cloudMembership && cloudMembership.businessId)
+        ),
         pendingEmailForVerification,
         state,
         updateDraftState,

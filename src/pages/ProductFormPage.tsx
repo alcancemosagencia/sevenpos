@@ -340,21 +340,22 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
       />
 
       {/* Header bar */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-border-default">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-border-default">
+        <div className="flex items-start sm:items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={handleBackAttempt}
-            className="p-2 rounded-xl bg-surface-secondary border border-border-default text-text-secondary hover:text-text-primary hover:bg-surface-tertiary transition-colors cursor-pointer"
+            className="p-2 rounded-xl bg-surface-secondary border border-border-default text-text-secondary hover:text-text-primary hover:bg-surface-tertiary transition-colors cursor-pointer shrink-0 mt-0.5 sm:mt-0"
             title="Volver a la lista de productos"
+            aria-label="Volver a la lista de productos"
           >
             <ArrowLeft size={18} />
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-2xl font-bold text-text-primary tracking-tight truncate">
               {isEditMode ? 'Editar producto' : 'Nuevo producto'}
             </h1>
-            <p className="text-xs sm:text-sm text-text-secondary">
+            <p className="text-xs sm:text-sm text-text-secondary mt-0.5 leading-relaxed">
               {isEditMode
                 ? 'Actualiza los datos del producto y su configuración de venta.'
                 : 'Ingresa los datos del producto para comenzar a venderlo.'}
@@ -362,8 +363,13 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="md" onClick={handleBackAttempt}>
+        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleBackAttempt}
+            className="flex-1 sm:flex-initial justify-center"
+          >
             Cancelar
           </Button>
           <Button
@@ -372,6 +378,7 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
             onClick={handleSubmit}
             isLoading={isSubmitting}
             leftIcon={<Save size={16} />}
+            className="flex-1 sm:flex-initial justify-center font-semibold"
           >
             <span>Guardar producto</span>
           </Button>
@@ -632,8 +639,13 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
         </div>
 
         {/* Form Bottom Save Actions */}
-        <div className="flex items-center justify-end gap-3 pt-3">
-          <Button variant="secondary" size="md" onClick={handleBackAttempt}>
+        <div className="flex items-center justify-end gap-3 pt-3 w-full">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleBackAttempt}
+            className="flex-1 sm:flex-initial justify-center"
+          >
             Cancelar
           </Button>
           <Button
@@ -642,6 +654,7 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
             type="submit"
             isLoading={isSubmitting}
             leftIcon={<Save size={16} />}
+            className="flex-1 sm:flex-initial justify-center font-semibold"
           >
             <span>Guardar producto</span>
           </Button>

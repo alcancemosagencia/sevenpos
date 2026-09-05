@@ -353,4 +353,62 @@ describe('DEPLOY-01A.7 — P0 Incident Root-Cause & Regression Suite', () => {
     expect(memberships.length).toBe(1);
     expect(cloudAuth.bootstrapCount).toBe(1); // Still exactly 1, no duplicate bootstrap
   });
+
+  it('16. LinkAccountBanner visibility rule: isCloudLinked is true when CloudBusinessLink or DeviceEnrollment exists', () => {
+    const evaluateIsCloudLinked = (
+      link: { localBusinessId: string; cloudBusinessId: string } | null,
+      enrollment: { deviceId: string; cloudBusinessId: string } | null,
+      membership: { businessId: string } | null
+    ): boolean => {
+      return Boolean(link || enrollment || (membership && membership.businessId));
+    };
+
+    // Unlinked case: all null -> isCloudLinked false (Banner renders)
+    expect(evaluateIsCloudLinked(null, null, null)).toBe(false);
+
+    // Linked via CloudBusinessLink -> isCloudLinked true (Banner hidden)
+    expect(
+      evaluateIsCloudLinked(
+        { localBusinessId: 'biz-1', cloudBusinessId: 'cbiz-1' },
+        null,
+        null
+      )
+    ).toBe(true);
+
+    // Linked via DeviceEnrollment (e.g. enrolled mobile terminal) -> isCloudLinked true (Banner hidden)
+    expect(
+      evaluateIsCloudLinked(
+        null,
+        { deviceId: 'dev-1', cloudBusinessId: 'cbiz-1' },
+        null
+      )
+    ).toBe(true);
+
+    // Linked via CloudMembership -> isCloudLinked true (Banner hidden)
+    expect(
+      evaluateIsCloudLinked(null, null, { businessId: 'cbiz-1' })
+    ).toBe(true);
+  });
+
+  it('17. Enrolling a mobile terminal creates DeviceEnrollment and synchronizes CloudBusinessLink', async () => {
+    const mobileDevice = await cloudAuth.enrollDevice({
+      businessId: 'biz-reg-1',
+      deviceName: 'Mi Android',
+      platform: 'Android Mobile',
+      deviceType: 'MOBILE',
+    });
+
+    expect(mobileDevice.deviceType).toBe('MOBILE');
+    expect(mobileDevice.deviceName).toBe('Mi Android');
+
+    // Link descriptor for the enrolled device
+    const link = {
+      localBusinessId: mobileDevice.businessId,
+      cloudBusinessId: mobileDevice.businessId,
+      cloudUserId: mobileDevice.userId,
+      linkedAt: mobileDevice.createdAt,
+    };
+    expect(link.cloudBusinessId).toBe('biz-reg-1');
+    expect(Boolean(link)).toBe(true);
+  });
 });

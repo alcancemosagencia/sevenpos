@@ -71,7 +71,7 @@ import { SqliteExpenseQueryRepository } from './SqliteExpenseQueryRepository';
 import { InMemoryExpenseQueryRepository } from './InMemoryExpenseQueryRepository';
 import { logger } from '../logging/Logger';
 
-class RepositoryFactory {
+export class RepositoryFactory {
   private businessRepo: BusinessRepository | null = null;
   private userRepo: UserRepository | null = null;
   private categoryRepo: CategoryRepository | null = null;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import sevenposLogo from '../../assets/branding/sevenpos-logo-horizontal.png';
 import onboardingOwnerIllustration from '../../assets/illustrations/onboarding-owner.png';
@@ -8,12 +8,14 @@ interface AccountLoginPageProps {
   onLogin: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   onGoToRegister: () => void;
   onForgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  onBack?: () => void;
 }
 
 export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
   onLogin,
   onGoToRegister,
   onForgotPassword,
+  onBack,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -102,12 +104,27 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
         {/* Right Form Panel */}
         <div className="lg:col-span-7 p-6 sm:p-8 md:p-10 flex flex-col justify-between">
           <div>
-            {/* Mobile Header Logo */}
-            <div className="lg:hidden flex items-center justify-between mb-6">
-              <img src={sevenposLogo} alt="SevenPOS" className="h-7 w-auto object-contain" />
-              <span className="text-[11px] font-semibold text-brand-primary bg-brand-primary/10 px-2.5 py-0.5 rounded-full">
-                Acceso Cloud
-              </span>
+            {/* Header with back button */}
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className="lg:hidden shrink-0">
+                <img src={sevenposLogo} alt="SevenPOS" className="h-6 w-auto object-contain" />
+              </div>
+              {onBack ? (
+                <button
+                  type="button"
+                  data-testid="login-back-btn"
+                  onClick={onBack}
+                  className="text-xs font-semibold text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors cursor-pointer ml-auto shrink-0"
+                >
+                  <ArrowLeft size={14} className="shrink-0" />
+                  <span className="hidden sm:inline">Volver a configuración</span>
+                  <span className="sm:hidden">Volver</span>
+                </button>
+              ) : (
+                <span className="lg:hidden text-[11px] font-semibold text-brand-primary bg-brand-primary/10 px-2.5 py-0.5 rounded-full ml-auto">
+                  Acceso Cloud
+                </span>
+              )}
             </div>
 
             <div className="space-y-1.5 mb-6">

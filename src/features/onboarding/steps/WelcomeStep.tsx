@@ -9,7 +9,7 @@ export interface WelcomeStepProps {
 }
 
 export const WelcomeStep: React.FC<WelcomeStepProps> = ({ onNext }) => {
-  const { goToLogin } = useAuth();
+  const { goToAccountLogin } = useAuth();
 
   return (
     <div className="space-y-4">
@@ -62,8 +62,9 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({ onNext }) => {
       <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <button
           type="button"
-          onClick={goToLogin}
-          className="text-xs text-text-secondary hover:text-brand-primary transition-colors cursor-pointer select-none inline-flex items-center gap-1.5"
+          data-testid="welcome-login-btn"
+          onClick={goToAccountLogin}
+          className="text-xs text-text-secondary hover:text-brand-primary transition-colors cursor-pointer select-none inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/50 rounded-lg p-1"
         >
           <LogIn size={14} />
           ¿Ya tienes cuenta? <span className="font-bold text-brand-primary underline">Inicia sesión</span>

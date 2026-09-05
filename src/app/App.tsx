@@ -41,6 +41,7 @@ import { SuppliersPage } from '../pages/SuppliersPage';
 import { CustomersPage } from '../pages/CustomersPage';
 import { CustomerDetailPage } from '../pages/CustomerDetailPage';
 import { ExpensesPage } from '../pages/ExpensesPage';
+import { ReportsPage } from '../pages/ReportsPage';
 
 // Navigation titles lookup
 const NAV_TITLES: Record<string, string> = {
@@ -380,6 +381,7 @@ const AppRoot: React.FC = () => {
           onLogin={signInWithEmail}
           onGoToRegister={goToRegister}
           onForgotPassword={sendPasswordReset}
+          onBack={goToRegister}
         />
         {renderDevTools()}
       </>
@@ -688,6 +690,10 @@ const AppRoot: React.FC = () => {
           }}
         />
       );
+    }
+
+    if (activeNavId === 'reports') {
+      return <ReportsPage />;
     }
 
     return (
