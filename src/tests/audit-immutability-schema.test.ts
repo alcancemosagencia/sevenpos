@@ -31,7 +31,10 @@ describe('AG-12 SQLite Schema 0009_audit.sql & Immutability Integrity Tests', ()
     expect(sqlContent).toContain('idx_audit_biz_correlation');
   });
 
-  it('enforces canonical categories in CHECK constraint', () => {
-    expect(sqlContent).toContain("CHECK(event_category IN ('AUTH', 'DEVICE', 'SALES', 'CASH', 'INVENTORY', 'CATALOG', 'PURCHASES', 'EXPENSES', 'CUSTOMERS', 'SECURITY', 'SYSTEM'))");
+  it('enforces canonical categories in CHECK constraint without SECURITY', () => {
+    expect(sqlContent).toContain(
+      "CHECK(event_category IN ('AUTH', 'DEVICE', 'SALES', 'CASH', 'INVENTORY', 'CATALOG', 'PURCHASES', 'EXPENSES', 'CUSTOMERS', 'SETTINGS', 'SYSTEM'))"
+    );
+    expect(sqlContent).not.toContain("'SECURITY'");
   });
 });

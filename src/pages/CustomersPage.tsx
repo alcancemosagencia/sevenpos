@@ -6,6 +6,7 @@ import { GetCustomerMetrics } from '../application/customers/GetCustomerMetrics'
 import { DeactivateCustomer, ActivateCustomer } from '../application/customers/UpdateCustomer';
 import { CustomerKpiCards } from '../features/customers/components/CustomerKpiCards';
 import { CustomerModal } from '../features/customers/components/CustomerModal';
+import { ExportCustomersModal } from '../features/customers/components/ExportCustomersModal';
 import { PageContainer } from '../components/shell/PageContainer';
 import { PageHeader } from '../components/shell/PageHeader';
 import { Button } from '../components/ui/Button';
@@ -22,6 +23,8 @@ import {
   Power,
   Phone,
   Mail,
+  Download,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface CustomersPageProps {
@@ -52,6 +55,13 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -115,16 +125,27 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
         title="Clientes"
         subtitle="Gestiona tu cartera de clientes, historial de compras y métricas de fidelización."
         actions={
-          <Button
-            variant="primary"
-            leftIcon={<Plus size={16} />}
-            onClick={() => {
-              setCustomerToEdit(null);
-              setIsModalOpen(true);
-            }}
-          >
-            Nuevo cliente
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              leftIcon={<Download size={15} />}
+              onClick={() => setIsExportModalOpen(true)}
+              className="text-xs sm:text-sm"
+            >
+              Exportar clientes
+            </Button>
+            <Button
+              variant="primary"
+              leftIcon={<Plus size={16} />}
+              onClick={() => {
+                setCustomerToEdit(null);
+                setIsModalOpen(true);
+              }}
+              className="text-xs sm:text-sm"
+            >
+              Nuevo cliente
+            </Button>
+          </div>
         }
       />
 
@@ -405,6 +426,22 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
         customerToEdit={customerToEdit}
         onSuccess={() => loadData()}
       />
+
+      {/* Export Customers Modal */}
+      <ExportCustomersModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        customers={filteredCustomers}
+        onSuccessToast={showToast}
+      />
+
+      {/* Toast feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-[#18181b] text-white border border-border-default shadow-lg text-xs font-medium animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <CheckCircle2 size={16} className="text-status-success" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </PageContainer>
   );
 };

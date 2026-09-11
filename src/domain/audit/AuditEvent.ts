@@ -8,7 +8,7 @@ export type AuditCategory =
   | 'PURCHASES'
   | 'EXPENSES'
   | 'CUSTOMERS'
-  | 'SECURITY'
+  | 'SETTINGS'
   | 'SYSTEM';
 
 export type AuditSeverity = 'INFO' | 'WARNING' | 'CRITICAL';

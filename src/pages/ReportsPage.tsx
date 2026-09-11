@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Scale,
   CheckCircle,
+  CheckCircle2,
   HelpCircle,
   AlertCircle,
   ArrowRight,
@@ -38,6 +39,12 @@ export const ReportsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ReportTabKey>('resumen');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Analytics Views State
   const [summaryData, setSummaryData] = useState<ExecutiveSummaryMetrics | null>(null);
@@ -130,11 +137,11 @@ export const ReportsPage: React.FC = () => {
             type="button"
             data-testid="export-csv-btn"
             onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface border border-border-default hover:border-border-strong text-sm font-medium text-foreground transition-all shadow-xs"
-            title="Exportar reporte a CSV"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-surface border border-border-default hover:border-border-strong text-sm font-medium text-foreground transition-all shadow-xs cursor-pointer"
+            title="Exportar reporte"
           >
             <Download size={15} className="text-content3" />
-            <span className="hidden sm:inline">Exportar CSV</span>
+            <span className="hidden sm:inline">Exportar</span>
           </button>
 
           <button
@@ -920,13 +927,22 @@ export const ReportsPage: React.FC = () => {
         </div>
       )}
 
-      {/* CSV Export Modal */}
+      {/* Export Modal */}
       <ExportCsvModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         businessId={businessId}
         currentRange={dateRange}
+        onSuccessToast={showToast}
       />
+
+      {/* Toast notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-[#18181b] text-white border border-border-default shadow-lg text-xs font-medium animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <CheckCircle2 size={16} className="text-status-success" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </PageContainer>
   );
 };

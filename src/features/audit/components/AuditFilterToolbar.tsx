@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, Download, RefreshCw } from 'lucide-react';
 import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
+import { FilterToolbar } from '../../../components/ui/FilterToolbar';
 import { Select, SelectOption } from '../../../components/ui/Select';
 import { DateRangePickerDropdown } from '../../../components/analytics/DateRangePickerDropdown';
 import { DateRange } from '../../../application/analytics/types';
@@ -70,6 +71,7 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
       { value: 'PURCHASES', label: 'Compras' },
       { value: 'EXPENSES', label: 'Gastos' },
       { value: 'CUSTOMERS', label: 'Clientes' },
+      { value: 'SETTINGS', label: 'Configuración' },
       { value: 'SYSTEM', label: 'Sistema' },
     ];
   }, [activeTab]);
@@ -82,7 +84,7 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
   ];
 
   return (
-    <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-surface dark:bg-[#18181b]/95 p-3 sm:p-4 rounded-2xl border border-border-default">
+    <FilterToolbar className="mb-4">
       {/* Search Input */}
       <div className="flex-1 min-w-[200px]">
         <Input
@@ -90,7 +92,7 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
           value={searchTerm}
           onChange={(e) => onSearchChange(e.target.value)}
           leftIcon={<Search size={16} className="text-text-secondary" />}
-          className="w-full bg-background"
+          className="w-full bg-surface"
         />
       </div>
 
@@ -132,17 +134,17 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
           <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
         </Button>
 
-        {/* Export CSV button */}
+        {/* Export button */}
         <Button
           variant="secondary"
           size="md"
           onClick={onExportCsv}
           leftIcon={<Download size={15} />}
-          className="font-medium whitespace-nowrap shrink-0"
+          className="font-medium whitespace-nowrap shrink-0 text-xs sm:text-sm"
         >
-          Exportar CSV
+          Exportar
         </Button>
       </div>
-    </div>
+    </FilterToolbar>
   );
 };

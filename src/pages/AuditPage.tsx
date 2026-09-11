@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
 import { AuditEvent, AuditCategory, AuditSeverity } from '../domain/audit/AuditEvent';
@@ -33,6 +33,12 @@ export const AuditPage: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Derive categories list based on active tab and manual selection
   const activeFilters = useMemo((): AuditFilters => {
@@ -244,7 +250,16 @@ export const AuditPage: React.FC = () => {
         businessId={businessId}
         filters={activeFilters}
         totalEventsCount={totalCount}
+        onSuccessToast={showToast}
       />
+
+      {/* Toast notification */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-[#18181b] text-white border border-border-default shadow-lg text-xs font-medium animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <CheckCircle2 size={16} className="text-status-success" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

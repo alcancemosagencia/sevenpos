@@ -278,82 +278,79 @@ export class OperationalAnalyticsService {
   // ---------------------------------------------------------------------------
   // 6. CSV EXPORT (RFC 4180 COMPLIANT)
   // ---------------------------------------------------------------------------
-  async exportReportCsv(businessId: string, reportType: ExportReportType, range: DateRange): Promise<string> {
-    const sanitizeCell = (val: unknown): string => {
-      if (val === null || val === undefined) return '';
-      const str = String(val);
-      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-
-    const formatCurrency = (minor: number): string => {
-      return (minor / 100).toFixed(2);
+  // 6. EXPORT UTILITY (EXCEL XLSX & CSV LATAM)
+  // ---------------------------------------------------------------------------
+  async getReportExportData(
+    businessId: string,
+    reportType: ExportReportType,
+    range: DateRange
+  ): Promise<{ headers: string[]; rows: (string | number)[][] }> {
+    const toMoneyNumber = (minor: number): number => {
+      return Number((minor / 100).toFixed(2));
     };
 
     switch (reportType) {
       case 'SALES_SUMMARY': {
         const salesView = await this.getSalesAnalytics(businessId, range);
         const headers = ['Métrica', 'Valor'];
-        const rows = [
+        const rows: (string | number)[][] = [
           ['Período', `${range.startDate} al ${range.endDate}`],
-          ['Ventas Netas ($)', formatCurrency(salesView.summary.totalSales)],
-          ['Cantidad de Tickets', salesView.summary.ticketCount.toString()],
-          ['Ticket Promedio ($)', formatCurrency(salesView.summary.averageTicket)],
-          ['Descuentos Otorgados ($)', formatCurrency(salesView.summary.totalDiscount)],
-          ['Ganancia Bruta Conocida ($)', formatCurrency(salesView.summary.knownGrossProfit)],
+          ['Ventas Netas ($)', toMoneyNumber(salesView.summary.totalSales)],
+          ['Cantidad de Tickets', salesView.summary.ticketCount],
+          ['Ticket Promedio ($)', toMoneyNumber(salesView.summary.averageTicket)],
+          ['Descuentos Otorgados ($)', toMoneyNumber(salesView.summary.totalDiscount)],
+          ['Ganancia Bruta Conocida ($)', toMoneyNumber(salesView.summary.knownGrossProfit)],
           ['Cobertura de Costo (%)', `${salesView.summary.costCoveragePercent}%`],
           ['Líneas con Costo Registrado', `${salesView.summary.linesWithCostCount} de ${salesView.summary.totalLinesCount}`],
         ];
-        return [headers.join(','), ...rows.map((r) => r.map(sanitizeCell).join(','))].join('\r\n');
+        return { headers, rows };
       }
 
       case 'SALES_LIST': {
         const sales = await this.getSalesList(businessId, range.fromUtc, range.toUtc, 1000);
         const headers = ['ID Venta', 'Fecha', 'Cliente', 'Items', 'Subtotal ($)', 'Descuento ($)', 'Total ($)', 'Método de Pago'];
-        const rows = sales.map((s) => [
+        const rows: (string | number)[][] = sales.map((s) => [
           s.saleNumber,
           s.completedAt,
           s.customerName,
-          s.itemCount.toString(),
-          formatCurrency(s.subtotal),
-          formatCurrency(s.discountTotal),
-          formatCurrency(s.total),
+          s.itemCount,
+          toMoneyNumber(s.subtotal),
+          toMoneyNumber(s.discountTotal),
+          toMoneyNumber(s.total),
           s.paymentMethods,
         ]);
-        return [headers.join(','), ...rows.map((r) => r.map(sanitizeCell).join(','))].join('\r\n');
+        return { headers, rows };
       }
 
       case 'TOP_PRODUCTS': {
         const top = await this.getTopProductsAnalytics(businessId, range.fromUtc, range.toUtc, 100);
         const headers = ['Producto', 'Categoría', 'Unidad Base', 'Cantidad Vendida', 'Ingresos Totales ($)', '% del Total Ventas', 'Tickets'];
-        const rows = top.map((p) => [
+        const rows: (string | number)[][] = top.map((p) => [
           p.productName,
           p.categoryName,
           p.baseUnit,
-          p.quantitySold.toFixed(2),
-          formatCurrency(p.totalRevenue),
+          Number(p.quantitySold.toFixed(2)),
+          toMoneyNumber(p.totalRevenue),
           `${p.revenuePercentOfTotal}%`,
-          p.ticketCount.toString(),
+          p.ticketCount,
         ]);
-        return [headers.join(','), ...rows.map((r) => r.map(sanitizeCell).join(','))].join('\r\n');
+        return { headers, rows };
       }
 
       case 'INVENTORY_STOCK': {
         const invRepo = this.repoFactory.getInventoryQueryRepository();
         const stockData = await invRepo.listStockTable({ businessId, limit: 1000 });
         const headers = ['Producto', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Estado', 'Costo Unitario ($)', 'Calidad de Costo'];
-        const rows = stockData.rows.map((r) => [
+        const rows: (string | number)[][] = stockData.rows.map((r) => [
           r.product.name,
           r.categoryName || 'Sin categoría',
-          (r.currentStock / 1000).toFixed(2),
-          r.minimumStock !== null ? (r.minimumStock / 1000).toFixed(2) : 'N/A',
+          Number((r.currentStock / 1000).toFixed(2)),
+          r.minimumStock !== null ? Number((r.minimumStock / 1000).toFixed(2)) : 'N/A',
           r.status,
-          r.estimatedCost !== null ? formatCurrency(r.estimatedCost) : 'N/A',
+          r.estimatedCost !== null ? toMoneyNumber(r.estimatedCost) : 'N/A',
           r.costQuality,
         ]);
-        return [headers.join(','), ...rows.map((r) => r.map(sanitizeCell).join(','))].join('\r\n');
+        return { headers, rows };
       }
 
       case 'OPERATING_EXPENSES': {
@@ -364,36 +361,56 @@ export class OperationalAnalyticsService {
           limit: 1000,
         });
         const headers = ['Fecha', 'Descripción', 'Categoría', 'Monto ($)', 'Método de Pago', 'Comprobante', 'Proveedor'];
-        const rows = expData.expenses.map((e) => [
+        const rows: (string | number)[][] = expData.expenses.map((e) => [
           e.expenseDate,
           e.description,
           e.categoryNameSnapshot,
-          formatCurrency(e.amount),
+          toMoneyNumber(e.amount),
           e.paymentMethodCode,
           e.referenceDocument || 'N/A',
           e.supplierNameSnapshot || 'N/A',
         ]);
-        return [headers.join(','), ...rows.map((r) => r.map(sanitizeCell).join(','))].join('\r\n');
+        return { headers, rows };
       }
 
       case 'CASH_SESSIONS_AUDIT': {
         const audit = await this.getCashSessionsAudit(businessId, range.fromUtc, range.toUtc);
         const headers = ['Caja', 'Apertura Por', 'Cierre Por', 'Fecha Apertura', 'Fecha Cierre', 'Monto Inicial ($)', 'Monto Esperado ($)', 'Monto Contado ($)', 'Diferencia ($)', 'Estado'];
-        const rows = audit.sessions.map((s) => [
+        const rows: (string | number)[][] = audit.sessions.map((s) => [
           s.registerName,
           s.openedByName,
           s.closedByName,
           s.openedAt,
           s.closedAt || 'N/A',
-          formatCurrency(s.initialCashAmount),
-          formatCurrency(s.expectedCashAmount),
-          s.countedCashAmount !== null ? formatCurrency(s.countedCashAmount) : 'N/A',
-          formatCurrency(s.differenceAmount),
+          toMoneyNumber(s.initialCashAmount),
+          toMoneyNumber(s.expectedCashAmount),
+          s.countedCashAmount !== null ? toMoneyNumber(s.countedCashAmount) : 'N/A',
+          toMoneyNumber(s.differenceAmount),
           s.status,
         ]);
-        return [headers.join(','), ...rows.map((r) => r.map(sanitizeCell).join(','))].join('\r\n');
+        return { headers, rows };
       }
     }
+  }
+
+  async exportReportCsv(
+    businessId: string,
+    reportType: ExportReportType,
+    range: DateRange,
+    delimiter: ',' | ';' = ','
+  ): Promise<string> {
+    const { headers, rows } = await this.getReportExportData(businessId, reportType, range);
+
+    const sanitizeCell = (val: unknown): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val);
+      if (str.includes(delimiter) || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    return [headers.join(delimiter), ...rows.map((r) => r.map(sanitizeCell).join(delimiter))].join('\r\n');
   }
 
   // ===========================================================================

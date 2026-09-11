@@ -1,34 +1,50 @@
 export const EVENT_TYPE_LABELS: Record<string, string> = {
+  // Auth & Security
   'auth.login.success': 'Acceso exitoso',
   'auth.pin.failed': 'Intento de acceso fallido',
   'auth.pin.locked': 'Acceso bloqueado temporalmente',
   'auth.logout': 'Cierre de sesión',
   'device.enrolled': 'Nuevo dispositivo configurado',
+
+  // Sales
   'sale.completed': 'Venta completada',
   'sale.discount.applied': 'Descuento aplicado',
+
+  // Cash & Sessions
   'cash.shift.opened': 'Caja abierta',
   'cash.shift.closed': 'Caja cerrada',
   'cash.discrepancy.detected': 'Diferencia al cerrar caja',
   'cash.movement.created': 'Movimiento de caja registrado',
+
+  // Inventory
   'inventory.adjustment.created': 'Ajuste de inventario',
   'inventory.stock.sale_deduction': 'Stock actualizado por venta',
   'inventory.stock.purchase_entry': 'Stock actualizado por compra',
+
+  // Catalog
   'product.created': 'Producto creado',
   'product.updated': 'Producto actualizado',
   'product.deactivated': 'Producto desactivado',
   'category.created': 'Categoría creada',
   'category.updated': 'Categoría actualizada',
   'category.deactivated': 'Categoría desactivada',
+
+  // Purchases & Expenses
   'purchase.order.created': 'Orden de compra creada',
   'purchase.receipt.created': 'Mercadería recibida',
   'expense.created': 'Gasto registrado',
+
+  // Customers
   'customer.created': 'Cliente registrado',
   'customer.updated': 'Cliente actualizado',
+
+  // Settings & Configuration (Fixture supported)
+  'settings.currency_updated': 'Tasa de cambio actualizada',
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
   AUTH: 'Seguridad y Acceso',
-  DEVICE: 'Dispositivos',
+  DEVICE: 'Seguridad y Acceso',
   SALES: 'Ventas',
   CASH: 'Caja y Turnos',
   INVENTORY: 'Inventario',
@@ -36,6 +52,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   PURCHASES: 'Compras',
   EXPENSES: 'Gastos',
   CUSTOMERS: 'Clientes',
+  SETTINGS: 'Configuración',
   SYSTEM: 'Sistema',
 };
 
@@ -45,16 +62,35 @@ export const SEVERITY_LABELS: Record<string, string> = {
   CRITICAL: 'Crítico',
 };
 
+const DEFAULT_EVENT_LABEL = 'Actividad registrada';
+const DEFAULT_CATEGORY_LABEL = 'General';
+const DEFAULT_SEVERITY_LABEL = 'Informativo';
+
 export function getHumanEventLabel(eventType: string): string {
-  return EVENT_TYPE_LABELS[eventType] || eventType;
+  if (EVENT_TYPE_LABELS[eventType]) {
+    return EVENT_TYPE_LABELS[eventType];
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
+    console.warn(`[AuditLabels] Unmapped eventType: "${eventType}". Using fallback "${DEFAULT_EVENT_LABEL}".`);
+  }
+  return DEFAULT_EVENT_LABEL;
 }
 
 export function getHumanCategoryLabel(category: string): string {
-  return CATEGORY_LABELS[category] || category;
+  if (CATEGORY_LABELS[category]) {
+    return CATEGORY_LABELS[category];
+  }
+  if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
+    console.warn(`[AuditLabels] Unmapped category: "${category}". Using fallback "${DEFAULT_CATEGORY_LABEL}".`);
+  }
+  return DEFAULT_CATEGORY_LABEL;
 }
 
 export function getHumanSeverityLabel(severity: string): string {
-  return SEVERITY_LABELS[severity] || severity;
+  if (SEVERITY_LABELS[severity]) {
+    return SEVERITY_LABELS[severity];
+  }
+  return DEFAULT_SEVERITY_LABEL;
 }
 
 export interface FriendlyMetadataEntry {
@@ -98,6 +134,12 @@ export function formatFriendlyMetadata(jsonString?: string | null): FriendlyMeta
       sku: 'Código / SKU',
       price: 'Precio de venta',
       cost: 'Costo unitario',
+      previousRate: 'Tasa anterior',
+      newRate: 'Nueva tasa',
+      exchangeRate: 'Tasa de cambio',
+      provider: 'Proveedor',
+      businessName: 'Nombre del negocio',
+      fiscalId: 'RUT / Identificador fiscal',
     };
 
     for (const [key, rawVal] of Object.entries(data)) {

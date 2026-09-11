@@ -78,7 +78,7 @@ export class AuditService {
     return this.auditQueryRepo.getByCorrelationId(businessId, correlationId);
   }
 
-  async exportToCsv(businessId: string, filters: AuditFilters): Promise<string> {
+  async getExportData(businessId: string, filters: AuditFilters): Promise<{ headers: string[]; rows: string[][] }> {
     const unpaginatedFilters: AuditFilters = {
       ...filters,
       limit: 10000,
@@ -98,12 +98,6 @@ export class AuditService {
       'Resumen',
     ];
 
-    const escapeCsv = (val: unknown): string => {
-      if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
-    };
-
     const formatTimestamp = (iso: string) => {
       try {
         const d = new Date(iso);
@@ -114,16 +108,29 @@ export class AuditService {
     };
 
     const rows = items.map((event) => [
-      escapeCsv(formatTimestamp(event.occurredAt)),
-      escapeCsv(getHumanCategoryLabel(event.eventCategory)),
-      escapeCsv(getHumanEventLabel(event.eventType)),
-      escapeCsv(getHumanSeverityLabel(event.severity)),
-      escapeCsv(event.actorNameSnapshot || event.actorRoleSnapshot || 'Sistema'),
-      escapeCsv(event.deviceNameSnapshot || 'Terminal principal'),
-      escapeCsv(event.entityLabel || event.entityType),
-      escapeCsv(event.summary),
+      formatTimestamp(event.occurredAt),
+      getHumanCategoryLabel(event.eventCategory),
+      getHumanEventLabel(event.eventType),
+      getHumanSeverityLabel(event.severity),
+      event.actorNameSnapshot || event.actorRoleSnapshot || 'Sistema',
+      event.deviceNameSnapshot || 'Terminal principal',
+      event.entityLabel || event.entityType,
+      event.summary,
     ]);
 
-    return [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    return { headers, rows };
+  }
+
+  async exportToCsv(businessId: string, filters: AuditFilters): Promise<string> {
+    const { headers, rows } = await this.getExportData(businessId, filters);
+
+    const escapeCsv = (val: unknown): string => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const csvRows = rows.map((r) => r.map(escapeCsv).join(';'));
+    return [headers.map(escapeCsv).join(';'), ...csvRows].join('\r\n');
   }
 }

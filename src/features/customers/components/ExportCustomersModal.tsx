@@ -1,47 +1,65 @@
 import React, { useState } from 'react';
-import { Download, X, FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FileSpreadsheet, X, Download, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
-import { AuditFilters } from '../../../domain/audit/AuditQueryRepository';
-import { repositoryFactory } from '../../../infrastructure/repositories/RepositoryFactory';
-import { getHumanCategoryLabel, getHumanSeverityLabel } from '../../../application/audit/auditEventLabels';
+import { CustomerWithStats, getCustomerDisplayName } from '../../../domain/customers/Customer';
 import { downloadXlsx, downloadCsvLatam, formatExportFilename } from '../../../utils/excelExportUtils';
 
-export interface ExportAuditCsvModalProps {
-  businessId: string;
-  filters: AuditFilters;
-  totalEventsCount: number;
+export interface ExportCustomersModalProps {
   isOpen: boolean;
   onClose: () => void;
+  customers: CustomerWithStats[];
   onSuccessToast?: (msg: string) => void;
 }
 
-export const ExportAuditCsvModal: React.FC<ExportAuditCsvModalProps> = ({
-  businessId,
-  filters,
-  totalEventsCount,
+export const ExportCustomersModal: React.FC<ExportCustomersModalProps> = ({
   isOpen,
   onClose,
+  customers,
   onSuccessToast,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<'xlsx' | 'csv'>('xlsx');
   const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleExport = async () => {
+  const handleDownload = async () => {
     try {
       setIsExporting(true);
-      setExportError(null);
+      setError(null);
 
-      const auditService = repositoryFactory.getAuditService();
-      const { headers, rows } = await auditService.getExportData(businessId, filters);
+      const headers = [
+        'Nombre',
+        'Documento/RUT',
+        'Teléfono',
+        'Correo electrónico',
+        'Estado',
+        'Fecha de registro',
+      ];
+
+      const formatDate = (iso: string) => {
+        try {
+          const d = new Date(iso);
+          return d.toLocaleDateString('es-CL');
+        } catch {
+          return iso.slice(0, 10);
+        }
+      };
+
+      const rows = customers.map((c) => [
+        getCustomerDisplayName(c),
+        c.documentNumber || '',
+        c.phone || '',
+        c.email || '',
+        c.active ? 'Activo' : 'Inactivo',
+        formatDate(c.createdAt),
+      ]);
 
       if (selectedFormat === 'xlsx') {
-        const filename = formatExportFilename('auditoria', 'xlsx');
-        downloadXlsx(filename, 'Auditoria', headers, rows);
+        const filename = formatExportFilename('clientes', 'xlsx');
+        downloadXlsx(filename, 'Clientes', headers, rows);
       } else {
-        const filename = formatExportFilename('auditoria', 'csv');
+        const filename = formatExportFilename('clientes', 'csv');
         downloadCsvLatam(filename, headers, rows, ';');
       }
 
@@ -50,7 +68,7 @@ export const ExportAuditCsvModal: React.FC<ExportAuditCsvModalProps> = ({
       }
       onClose();
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Error al exportar archivo.');
+      setError(err instanceof Error ? err.message : 'Error al exportar archivo.');
     } finally {
       setIsExporting(false);
     }
@@ -70,8 +88,8 @@ export const ExportAuditCsvModal: React.FC<ExportAuditCsvModalProps> = ({
               <FileSpreadsheet size={18} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-text-primary">Exportar Registro de Auditoría</h3>
-              <p className="text-xs text-text-secondary">Descarga de bitácora y eventos de seguridad</p>
+              <h3 className="text-sm font-bold text-text-primary">Exportar clientes</h3>
+              <p className="text-xs text-text-secondary">Descarga tus datos de clientes</p>
             </div>
           </div>
           <button
@@ -86,29 +104,15 @@ export const ExportAuditCsvModal: React.FC<ExportAuditCsvModalProps> = ({
 
         {/* Body */}
         <div className="p-4 sm:p-5 space-y-4 text-xs sm:text-sm">
+          <p className="text-xs text-text-secondary">
+            Descarga la información de tus clientes para trabajarla fuera de SevenPOS.
+          </p>
+
           <div className="p-3.5 rounded-xl bg-surface-secondary/70 dark:bg-[#27272a]/60 border border-border-default space-y-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="text-text-secondary">Eventos a exportar:</span>
-              <span className="font-bold text-text-primary">{totalEventsCount.toLocaleString('es-CL')} registros</span>
+              <span className="text-text-secondary">Clientes a exportar:</span>
+              <span className="font-bold text-text-primary">{customers.length.toLocaleString('es-CL')} registros</span>
             </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-text-secondary">Filtro de categoría:</span>
-              <span className="font-medium text-text-primary">
-                {filters.category ? getHumanCategoryLabel(filters.category) : 'Todas'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-text-secondary">Filtro de severidad:</span>
-              <span className="font-medium text-text-primary">
-                {filters.severity ? getHumanSeverityLabel(filters.severity) : 'Todas'}
-              </span>
-            </div>
-            {filters.searchTerm && (
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-text-secondary">Búsqueda:</span>
-                <span className="font-medium text-text-primary truncate max-w-[160px]">"{filters.searchTerm}"</span>
-              </div>
-            )}
           </div>
 
           {/* Format Selector */}
@@ -149,10 +153,10 @@ export const ExportAuditCsvModal: React.FC<ExportAuditCsvModalProps> = ({
             </div>
           </div>
 
-          {exportError && (
+          {error && (
             <div className="p-3 rounded-xl bg-status-danger-bg text-status-danger-text border border-status-danger/20 flex items-start gap-2 text-xs">
               <AlertCircle size={15} className="shrink-0 mt-0.5" />
-              <span>{exportError}</span>
+              <span>{error}</span>
             </div>
           )}
         </div>
@@ -165,8 +169,8 @@ export const ExportAuditCsvModal: React.FC<ExportAuditCsvModalProps> = ({
           <Button
             variant="primary"
             size="sm"
-            onClick={handleExport}
-            disabled={isExporting || totalEventsCount === 0}
+            onClick={handleDownload}
+            disabled={isExporting || customers.length === 0}
             className="flex items-center gap-1.5"
           >
             <Download size={15} />

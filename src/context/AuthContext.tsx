@@ -1024,7 +1024,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         actorNameSnapshot: activeOwnerName,
         deviceId: deviceEnrollment?.deviceId || null,
         deviceNameSnapshot: deviceEnrollment?.displayName || null,
-        entityType: 'SECURITY',
+        entityType: 'AUTH',
         entityId: result.userId || 'device-pin',
         summary: isLocked
           ? 'Terminal bloqueado temporalmente por reiterados intentos fallidos de PIN'
