@@ -106,7 +106,7 @@ export const LinkAccountModal: React.FC<LinkAccountModalProps> = ({
           onClose();
         }
       } catch (err: unknown) {
-        setErrorMessage(err instanceof Error ? err.message : 'Error al iniciar sesión cloud.');
+        setErrorMessage(err instanceof Error ? err.message : 'Error al iniciar sesión.');
       } finally {
         setIsSubmitting(false);
       }
@@ -127,7 +127,7 @@ export const LinkAccountModal: React.FC<LinkAccountModalProps> = ({
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold">
             <ShieldCheck size={14} />
-            <span>Cloud Identity</span>
+            <span>Acceso seguro</span>
           </div>
           <h2 className="text-xl font-bold text-text-primary">
             Protege y vincula tu negocio

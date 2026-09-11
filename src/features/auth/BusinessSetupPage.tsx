@@ -72,10 +72,10 @@ export const BusinessSetupPage: React.FC<BusinessSetupPageProps> = ({
             <span>Configurar Negocio</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-text-primary">
-            Crea tu Negocio Cloud
+            Registra tu negocio
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary">
-            Tu cuenta <strong className="text-text-primary">{userEmail}</strong> está autenticada. Ingresa el nombre de tu negocio para comenzar.
+            Tu cuenta <strong className="text-text-primary">{userEmail}</strong> está lista. Ingresa el nombre de tu negocio para comenzar.
           </p>
         </div>
 
@@ -125,7 +125,7 @@ export const BusinessSetupPage: React.FC<BusinessSetupPageProps> = ({
             rightIcon={<ArrowRight size={16} />}
             className="w-full mt-2 font-bold"
           >
-            Continuar a enrolar dispositivo
+            Continuar a configurar terminal
           </Button>
         </form>
 

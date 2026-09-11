@@ -5,6 +5,7 @@ import { InventoryMovement } from '../../domain/inventory/InventoryMovement';
 import { SaleRepository, ListSalesOptions } from '../../domain/sales/repositories/SaleRepository';
 import { DatabaseManager } from '../database/DatabaseManager';
 import { logger } from '../logging/Logger';
+import { insertAuditRowInTransaction } from '../../application/audit/auditEventHelper';
 
 interface SaleRow {
   id: string;
@@ -331,6 +332,86 @@ export class SqliteSaleRepository implements SaleRepository {
             cashMovement.createdAt,
           ]
         );
+      }
+
+      // 6. In-transaction Audit Events (Append-Only)
+      // 6a. Sale Completed
+      await insertAuditRowInTransaction(db, {
+        businessId: sale.businessId,
+        eventCategory: 'SALES',
+        eventType: 'sale.completed',
+        action: 'SALE_COMPLETED',
+        severity: 'INFO',
+        actorUserId: sale.createdByUserId,
+        actorNameSnapshot: sale.createdByNameSnapshot,
+        entityType: 'SALE',
+        entityId: sale.id,
+        entityLabel: sale.saleNumber,
+        summary: `Venta ${sale.saleNumber} completada por ${sale.currencyCode} ${sale.total.toLocaleString('es-CL')}`,
+        correlationId: sale.id,
+        metadata: {
+          saleNumber: sale.saleNumber,
+          total: sale.total,
+          subtotal: sale.subtotal,
+          discountTotal: sale.discountTotal,
+          taxTotal: sale.taxTotal,
+          currencyCode: sale.currencyCode,
+          customerNameSnapshot: finalCustomerNameSnapshot,
+          itemsCount: items.length,
+          paymentsCount: payments.length,
+        },
+      });
+
+      // 6b. Discount Applied (if any)
+      if (sale.discountTotal > 0) {
+        await insertAuditRowInTransaction(db, {
+          businessId: sale.businessId,
+          eventCategory: 'SALES',
+          eventType: 'sale.discount.applied',
+          action: 'DISCOUNT_APPLIED',
+          severity: 'INFO',
+          actorUserId: sale.createdByUserId,
+          actorNameSnapshot: sale.createdByNameSnapshot,
+          entityType: 'SALE',
+          entityId: sale.id,
+          entityLabel: sale.saleNumber,
+          summary: `Descuento de ${sale.currencyCode} ${sale.discountTotal.toLocaleString('es-CL')} aplicado en venta ${sale.saleNumber}`,
+          correlationId: sale.id,
+          metadata: {
+            saleNumber: sale.saleNumber,
+            discountTotal: sale.discountTotal,
+            total: sale.total,
+            currencyCode: sale.currencyCode,
+          },
+        });
+      }
+
+      // 6c. Inventory Deduction (1 aggregated event per sale)
+      if (movements.length > 0) {
+        await insertAuditRowInTransaction(db, {
+          businessId: sale.businessId,
+          eventCategory: 'INVENTORY',
+          eventType: 'inventory.stock.sale_deduction',
+          action: 'STOCK_DEDUCTED',
+          severity: 'INFO',
+          actorUserId: sale.createdByUserId,
+          actorNameSnapshot: sale.createdByNameSnapshot,
+          entityType: 'SALE',
+          entityId: sale.id,
+          entityLabel: sale.saleNumber,
+          summary: `Deducción de stock por venta ${sale.saleNumber} (${movements.length} líneas)`,
+          correlationId: sale.id,
+          metadata: {
+            saleNumber: sale.saleNumber,
+            movementsCount: movements.length,
+            items: items.map((i) => ({
+              productId: i.productId,
+              name: i.productNameSnapshot,
+              quantity: i.quantity,
+              delta: i.inventoryQuantityDelta,
+            })),
+          },
+        });
       }
 
       await db.execute('COMMIT');

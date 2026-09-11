@@ -6,6 +6,7 @@ import { InventoryMovement } from '../../domain/inventory/InventoryMovement';
 import { DatabaseManager } from '../database/DatabaseManager';
 import { InMemoryInventoryMovementRepository } from './InMemoryInventoryMovementRepository';
 import { logger } from '../logging/Logger';
+import { insertAuditRowInTransaction } from '../../application/audit/auditEventHelper';
 
 interface MovementRow {
   id: string;
@@ -136,6 +137,32 @@ export class SqliteInventoryMovementRepository implements InventoryMovementRepos
           now,
         ]
       );
+
+      // In-transaction Audit Event: Inventory Adjustment
+      if (
+        params.movementType === 'ADJUSTMENT_IN' ||
+        params.movementType === 'ADJUSTMENT_OUT' ||
+        params.movementType === 'WASTE'
+      ) {
+        await insertAuditRowInTransaction(db, {
+          businessId: params.businessId,
+          eventCategory: 'INVENTORY',
+          eventType: 'inventory.adjustment.created',
+          action: 'STOCK_ADJUSTMENT',
+          severity: 'INFO',
+          actorUserId: params.createdByUserId,
+          entityType: 'INVENTORY_MOVEMENT',
+          entityId: movementId,
+          summary: `Ajuste manual de inventario (${params.quantityDelta > 0 ? '+' : ''}${params.quantityDelta / 1000} unidades)`,
+          metadata: {
+            productId: params.productId,
+            lotId: params.lotId || null,
+            quantityDelta: params.quantityDelta,
+            reasonCode: params.reasonCode || null,
+            note: params.note || null,
+          },
+        });
+      }
 
       await db.execute('COMMIT;');
 

@@ -21,6 +21,7 @@ import { QUANTITY_SCALE } from '../../domain/common/quantity/Quantity';
 import { generateUUID } from '../../domain/common/IdGenerator';
 import { getCurrentTimestamp } from '../../domain/common/Timestamp';
 import { logger } from '../logging/Logger';
+import { insertAuditRowInTransaction } from '../../application/audit/auditEventHelper';
 
 interface PurchaseOrderRow {
   id: string;
@@ -391,6 +392,28 @@ export class SqlitePurchaseOrderRepository implements PurchaseOrderRepository {
           ]
         );
       }
+
+      // In-transaction Audit Event: Purchase Order Created
+      await insertAuditRowInTransaction(db, {
+        businessId,
+        eventCategory: 'PURCHASES',
+        eventType: 'purchase.order.created',
+        action: 'CREATE_PURCHASE_ORDER',
+        severity: 'INFO',
+        actorUserId: order.createdByUserId,
+        actorNameSnapshot: order.createdByNameSnapshot,
+        entityType: 'PURCHASE_ORDER',
+        entityId: order.id,
+        entityLabel: orderNumber,
+        summary: `Orden de compra creada: ${orderNumber} (${order.currencyCode} ${order.total.toLocaleString('es-CL')})`,
+        correlationId: order.id,
+        metadata: {
+          orderNumber,
+          supplierId: order.supplierId,
+          total: order.total,
+          itemsCount: items.length,
+        },
+      });
 
       await db.execute('COMMIT');
 
@@ -777,6 +800,48 @@ export class SqlitePurchaseOrderRepository implements PurchaseOrderRepository {
         WHERE business_id = ? AND id = ?`,
         [nextStatus, now, nextStatus, now, businessId, order.id]
       );
+
+      // In-transaction Audit Events: Receipt & Stock Entry
+      await insertAuditRowInTransaction(db, {
+        businessId,
+        eventCategory: 'PURCHASES',
+        eventType: 'purchase.receipt.created',
+        action: 'RECEIVE_PURCHASE',
+        severity: 'INFO',
+        actorUserId: dto.receivedByUserId,
+        actorNameSnapshot: dto.receivedByNameSnapshot,
+        entityType: 'PURCHASE_RECEIPT',
+        entityId: receiptId,
+        entityLabel: receiptNumber,
+        summary: `Recepción de compra ${receiptNumber} registrada para orden ${order.orderNumber}`,
+        correlationId: order.id,
+        metadata: {
+          receiptNumber,
+          orderNumber: order.orderNumber,
+          itemsCount: newReceiptItems.length,
+          orderStatus: nextStatus,
+        },
+      });
+
+      await insertAuditRowInTransaction(db, {
+        businessId,
+        eventCategory: 'INVENTORY',
+        eventType: 'inventory.stock.purchase_entry',
+        action: 'STOCK_ENTRY',
+        severity: 'INFO',
+        actorUserId: dto.receivedByUserId,
+        actorNameSnapshot: dto.receivedByNameSnapshot,
+        entityType: 'PURCHASE_RECEIPT',
+        entityId: receiptId,
+        entityLabel: receiptNumber,
+        summary: `Ingreso de stock por recepción de compra ${receiptNumber} (${newReceiptItems.length} líneas)`,
+        correlationId: order.id,
+        metadata: {
+          receiptNumber,
+          orderNumber: order.orderNumber,
+          itemsCount: newReceiptItems.length,
+        },
+      });
 
       await db.execute('COMMIT');
 

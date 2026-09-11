@@ -15,6 +15,7 @@ import { DatabaseManager } from '../database/DatabaseManager';
 import { generateUUID } from '../../domain/common/IdGenerator';
 import { getCurrentTimestamp } from '../../domain/common/Timestamp';
 import { logger } from '../logging/Logger';
+import { logAuditEventSafely } from '../../application/audit/auditEventHelper';
 
 interface CustomerRow {
   id: string;
@@ -192,6 +193,23 @@ export class SqliteCustomerRepository implements CustomerRepository {
       await db.execute(sql, params);
       const created = await this.findById(businessId, id);
       if (!created) throw new Error('Error al recuperar cliente recién creado.');
+
+      const fullName = `${created.name} ${created.lastName || ''}`.trim();
+      logAuditEventSafely({
+        businessId,
+        eventCategory: 'CUSTOMERS',
+        eventType: 'customer.created',
+        action: 'CREATE_CUSTOMER',
+        severity: 'INFO',
+        entityType: 'CUSTOMER',
+        entityId: created.id,
+        entityLabel: fullName,
+        summary: `Cliente registrado: ${fullName}`,
+        metadata: {
+          customerNameSnapshot: fullName,
+        },
+      });
+
       return created;
     } catch (err) {
       logger.error('SqliteCustomerRepository', 'Failed to create customer', { error: String(err) });
@@ -244,6 +262,24 @@ export class SqliteCustomerRepository implements CustomerRepository {
 
     try {
       await db.execute(sql, params);
+
+      const fullName = `${updated.name} ${updated.lastName || ''}`.trim();
+      logAuditEventSafely({
+        businessId,
+        eventCategory: 'CUSTOMERS',
+        eventType: 'customer.updated',
+        action: 'UPDATE_CUSTOMER',
+        severity: 'INFO',
+        entityType: 'CUSTOMER',
+        entityId: updated.id,
+        entityLabel: fullName,
+        summary: `Cliente modificado: ${fullName}`,
+        metadata: {
+          customerNameSnapshot: fullName,
+          active: updated.active,
+        },
+      });
+
       return updated;
     } catch (err) {
       logger.error('SqliteCustomerRepository', 'Failed to update customer', { error: String(err) });

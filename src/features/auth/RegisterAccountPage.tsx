@@ -112,13 +112,13 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
         <div className="space-y-1">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold">
             <Sparkles size={13} />
-            <span>Crear Cuenta Propietario</span>
+            <span>Crear cuenta de negocio</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-text-primary">
             Crea tu cuenta SevenPOS
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary">
-            Registra tus datos y vincula tu negocio cloud para acceder desde cualquier terminal.
+            Registra tus datos y vincula tu negocio para acceder desde cualquier terminal.
           </p>
         </div>
 

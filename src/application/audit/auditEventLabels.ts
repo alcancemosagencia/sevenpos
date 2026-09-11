@@ -1,0 +1,133 @@
+export const EVENT_TYPE_LABELS: Record<string, string> = {
+  'auth.login.success': 'Acceso exitoso',
+  'auth.pin.failed': 'Intento de acceso fallido',
+  'auth.pin.locked': 'Acceso bloqueado temporalmente',
+  'auth.logout': 'Cierre de sesión',
+  'device.enrolled': 'Nuevo dispositivo configurado',
+  'sale.completed': 'Venta completada',
+  'sale.discount.applied': 'Descuento aplicado',
+  'cash.shift.opened': 'Caja abierta',
+  'cash.shift.closed': 'Caja cerrada',
+  'cash.discrepancy.detected': 'Diferencia al cerrar caja',
+  'cash.movement.created': 'Movimiento de caja registrado',
+  'inventory.adjustment.created': 'Ajuste de inventario',
+  'inventory.stock.sale_deduction': 'Stock actualizado por venta',
+  'inventory.stock.purchase_entry': 'Stock actualizado por compra',
+  'product.created': 'Producto creado',
+  'product.updated': 'Producto actualizado',
+  'product.deactivated': 'Producto desactivado',
+  'category.created': 'Categoría creada',
+  'category.updated': 'Categoría actualizada',
+  'category.deactivated': 'Categoría desactivada',
+  'purchase.order.created': 'Orden de compra creada',
+  'purchase.receipt.created': 'Mercadería recibida',
+  'expense.created': 'Gasto registrado',
+  'customer.created': 'Cliente registrado',
+  'customer.updated': 'Cliente actualizado',
+};
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  AUTH: 'Seguridad y Acceso',
+  DEVICE: 'Dispositivos',
+  SALES: 'Ventas',
+  CASH: 'Caja y Turnos',
+  INVENTORY: 'Inventario',
+  CATALOG: 'Catálogo',
+  PURCHASES: 'Compras',
+  EXPENSES: 'Gastos',
+  CUSTOMERS: 'Clientes',
+  SYSTEM: 'Sistema',
+};
+
+export const SEVERITY_LABELS: Record<string, string> = {
+  INFO: 'Informativo',
+  WARNING: 'Advertencia',
+  CRITICAL: 'Crítico',
+};
+
+export function getHumanEventLabel(eventType: string): string {
+  return EVENT_TYPE_LABELS[eventType] || eventType;
+}
+
+export function getHumanCategoryLabel(category: string): string {
+  return CATEGORY_LABELS[category] || category;
+}
+
+export function getHumanSeverityLabel(severity: string): string {
+  return SEVERITY_LABELS[severity] || severity;
+}
+
+export interface FriendlyMetadataEntry {
+  label: string;
+  value: string;
+}
+
+export function formatFriendlyMetadata(jsonString?: string | null): FriendlyMetadataEntry[] {
+  if (!jsonString) return [];
+  try {
+    const data = JSON.parse(jsonString);
+    if (!data || typeof data !== 'object') return [];
+
+    const entries: FriendlyMetadataEntry[] = [];
+
+    const keyLabels: Record<string, string> = {
+      saleNumber: 'N° de Venta',
+      total: 'Monto total',
+      subtotal: 'Subtotal',
+      discountTotal: 'Descuento aplicado',
+      taxTotal: 'Impuestos',
+      currencyCode: 'Moneda',
+      customerNameSnapshot: 'Cliente',
+      itemCount: 'Cantidad de productos',
+      productName: 'Producto',
+      quantityDelta: 'Cambio de unidades',
+      reason: 'Motivo',
+      initialCash: 'Fondo inicial de caja',
+      finalCash: 'Monto final de caja',
+      declaredCash: 'Efectivo declarado',
+      calculatedCash: 'Efectivo esperado en sistema',
+      discrepancy: 'Diferencia en arqueo',
+      method: 'Método de ingreso',
+      platform: 'Plataforma del terminal',
+      attemptCount: 'N° de intento',
+      maxAttempts: 'Intentos máximos permitidos',
+      amount: 'Monto registrado',
+      orderNumber: 'N° de orden de compra',
+      supplierName: 'Proveedor',
+      categoryName: 'Nombre de categoría',
+      sku: 'Código / SKU',
+      price: 'Precio de venta',
+      cost: 'Costo unitario',
+    };
+
+    for (const [key, rawVal] of Object.entries(data)) {
+      if (key.startsWith('_')) continue;
+      const label = keyLabels[key] || key;
+      let formattedVal = String(rawVal);
+
+      if (typeof rawVal === 'number') {
+        const kLow = key.toLowerCase();
+        if (
+          kLow.includes('total') ||
+          kLow.includes('cash') ||
+          kLow.includes('amount') ||
+          kLow.includes('price') ||
+          kLow.includes('cost') ||
+          kLow.includes('discrepancy')
+        ) {
+          formattedVal = `$ ${rawVal.toLocaleString('es-CL')}`;
+        } else {
+          formattedVal = rawVal.toLocaleString('es-CL');
+        }
+      } else if (typeof rawVal === 'boolean') {
+        formattedVal = rawVal ? 'Sí' : 'No';
+      }
+
+      entries.push({ label, value: formattedVal });
+    }
+
+    return entries;
+  } catch {
+    return [];
+  }
+}

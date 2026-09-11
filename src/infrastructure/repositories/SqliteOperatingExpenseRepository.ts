@@ -9,6 +9,7 @@ import { ExpensePaymentMethod } from '../../domain/expenses/ExpensePaymentMethod
 import { CurrencyCode } from '../../types/country';
 import { DatabaseManager } from '../database/DatabaseManager';
 import { logger } from '../logging/Logger';
+import { insertAuditRowInTransaction } from '../../application/audit/auditEventHelper';
 
 interface ExpenseRow {
   id: string;
@@ -298,6 +299,31 @@ export class SqliteOperatingExpenseRepository implements OperatingExpenseReposit
           ]
         );
       }
+
+      // 8. In-transaction Audit Event: Expense Recorded
+      await insertAuditRowInTransaction(db, {
+        businessId: expense.businessId,
+        eventCategory: 'EXPENSES',
+        eventType: 'expense.created',
+        action: 'CREATE_EXPENSE',
+        severity: 'INFO',
+        actorUserId: expense.createdByUserId,
+        actorNameSnapshot: expense.createdByNameSnapshot,
+        entityType: 'OPERATING_EXPENSE',
+        entityId: expense.id,
+        entityLabel: expenseNumber,
+        summary: `Gasto operativo registrado: ${expenseNumber} (${expense.currencyCode} ${expense.amount.toLocaleString('es-CL')}) - ${finalCategoryNameSnapshot}`,
+        correlationId: expense.id,
+        metadata: {
+          expenseNumber,
+          amount: expense.amount,
+          currencyCode: expense.currencyCode,
+          categoryNameSnapshot: finalCategoryNameSnapshot,
+          paymentMethodCode: expense.paymentMethodCode,
+          supplierNameSnapshot: finalSupplierNameSnapshot,
+          referenceDocument: expense.referenceDocument || null,
+        },
+      });
 
       await db.execute('COMMIT');
 

@@ -12,6 +12,7 @@ import { BaseUnitCode } from '../../domain/common/unit/BaseUnit';
 import { DatabaseManager } from '../database/DatabaseManager';
 import { logger } from '../logging/Logger';
 import { SqliteProductPresentationRepository } from './SqliteProductPresentationRepository';
+import { logAuditEventSafely } from '../../application/audit/auditEventHelper';
 
 interface ProductRow {
   id: string;
@@ -318,6 +319,26 @@ export class SqliteProductRepository implements ProductRepository {
           product.updatedAt,
         ]
       );
+
+      logAuditEventSafely({
+        businessId: product.businessId,
+        eventCategory: 'CATALOG',
+        eventType: 'product.created',
+        action: 'CREATE_PRODUCT',
+        severity: 'INFO',
+        entityType: 'PRODUCT',
+        entityId: product.id,
+        entityLabel: product.name,
+        summary: `Producto creado: ${product.name} (SKU: ${product.sku || '-'}, Precio: $${product.salePrice.toLocaleString('es-CL')})`,
+        metadata: {
+          name: product.name,
+          sku: product.sku || null,
+          barcode: product.barcode || null,
+          salePrice: product.salePrice,
+          costPrice: product.costPrice ?? null,
+          baseUnit: product.baseUnit,
+        },
+      });
     } catch (err) {
       logger.error('SqliteProductRepository', 'Error en save', { error: String(err) });
       throw err;
@@ -348,6 +369,24 @@ export class SqliteProductRepository implements ProductRepository {
           product.businessId,
         ]
       );
+
+      logAuditEventSafely({
+        businessId: product.businessId,
+        eventCategory: 'CATALOG',
+        eventType: 'product.updated',
+        action: 'UPDATE_PRODUCT',
+        severity: 'INFO',
+        entityType: 'PRODUCT',
+        entityId: product.id,
+        entityLabel: product.name,
+        summary: `Producto modificado: ${product.name}`,
+        metadata: {
+          name: product.name,
+          salePrice: product.salePrice,
+          costPrice: product.costPrice ?? null,
+          active: product.active,
+        },
+      });
     } catch (err) {
       logger.error('SqliteProductRepository', 'Error en update', { error: String(err) });
       throw err;
@@ -361,6 +400,17 @@ export class SqliteProductRepository implements ProductRepository {
         `UPDATE products SET active = 0, updated_at = $1 WHERE id = $2 AND business_id = $3;`,
         [new Date().toISOString(), id, businessId]
       );
+
+      logAuditEventSafely({
+        businessId,
+        eventCategory: 'CATALOG',
+        eventType: 'product.deactivated',
+        action: 'DEACTIVATE_PRODUCT',
+        severity: 'INFO',
+        entityType: 'PRODUCT',
+        entityId: id,
+        summary: `Producto desactivado (ID: ${id})`,
+      });
     } catch (err) {
       logger.error('SqliteProductRepository', 'Error en deactivate', { error: String(err) });
       throw err;

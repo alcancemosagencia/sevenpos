@@ -55,7 +55,7 @@ export const ExistingLocalBusinessLinkPage: React.FC<ExistingLocalBusinessLinkPa
             Vincular tu negocio actual
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary">
-            Hemos detectado los datos de tu negocio en esta PC. Vincúlalo a tu cuenta SevenPOS para habilitar sincronización cloud y acceso multi-dispositivo sin perder tu información local ni tu PIN.
+            Hemos detectado los datos de tu negocio en este equipo. Vincúlalo a tu cuenta SevenPOS para habilitar sincronización y acceso multidispositivo sin perder tu información ni tu PIN.
           </p>
         </div>
 

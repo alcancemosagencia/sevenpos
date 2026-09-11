@@ -2,6 +2,7 @@ import { CategoryRepository } from '../../domain/catalog/CategoryRepository';
 import { Category } from '../../domain/catalog/Category';
 import { DatabaseManager } from '../database/DatabaseManager';
 import { logger } from '../logging/Logger';
+import { logAuditEventSafely } from '../../application/audit/auditEventHelper';
 
 interface CategoryRow {
   id: string;
@@ -91,6 +92,23 @@ export class SqliteCategoryRepository implements CategoryRepository {
           category.updatedAt,
         ]
       );
+
+      logAuditEventSafely({
+        businessId: category.businessId,
+        eventCategory: 'CATALOG',
+        eventType: 'category.created',
+        action: 'CREATE_CATEGORY',
+        severity: 'INFO',
+        entityType: 'CATEGORY',
+        entityId: category.id,
+        entityLabel: category.name,
+        summary: `Categoría creada: ${category.name}`,
+        metadata: {
+          name: category.name,
+          description: category.description || null,
+          color: category.color || null,
+        },
+      });
     } catch (err) {
       logger.error('SqliteCategoryRepository', 'Error en save', { error: String(err) });
       throw err;
@@ -113,6 +131,23 @@ export class SqliteCategoryRepository implements CategoryRepository {
           category.businessId,
         ]
       );
+
+      logAuditEventSafely({
+        businessId: category.businessId,
+        eventCategory: 'CATALOG',
+        eventType: 'category.updated',
+        action: 'UPDATE_CATEGORY',
+        severity: 'INFO',
+        entityType: 'CATEGORY',
+        entityId: category.id,
+        entityLabel: category.name,
+        summary: `Categoría modificada: ${category.name}`,
+        metadata: {
+          name: category.name,
+          color: category.color || null,
+          active: category.active,
+        },
+      });
     } catch (err) {
       logger.error('SqliteCategoryRepository', 'Error en update', { error: String(err) });
       throw err;
@@ -126,6 +161,17 @@ export class SqliteCategoryRepository implements CategoryRepository {
         `UPDATE categories SET active = 0, updated_at = $1 WHERE id = $2 AND business_id = $3;`,
         [new Date().toISOString(), id, businessId]
       );
+
+      logAuditEventSafely({
+        businessId,
+        eventCategory: 'CATALOG',
+        eventType: 'category.deactivated',
+        action: 'DEACTIVATE_CATEGORY',
+        severity: 'INFO',
+        entityType: 'CATEGORY',
+        entityId: id,
+        summary: `Categoría desactivada (ID: ${id})`,
+      });
     } catch (err) {
       logger.error('SqliteCategoryRepository', 'Error en deactivate', { error: String(err) });
       throw err;

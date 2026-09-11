@@ -42,6 +42,7 @@ import { CustomersPage } from '../pages/CustomersPage';
 import { CustomerDetailPage } from '../pages/CustomerDetailPage';
 import { ExpensesPage } from '../pages/ExpensesPage';
 import { ReportsPage } from '../pages/ReportsPage';
+import { AuditPage } from '../pages/AuditPage';
 
 // Navigation titles lookup
 const NAV_TITLES: Record<string, string> = {
@@ -694,6 +695,10 @@ const AppRoot: React.FC = () => {
 
     if (activeNavId === 'reports') {
       return <ReportsPage />;
+    }
+
+    if (activeNavId === 'audit') {
+      return <AuditPage />;
     }
 
     return (

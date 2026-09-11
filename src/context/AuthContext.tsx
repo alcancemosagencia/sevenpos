@@ -16,6 +16,7 @@ import { CloudBusinessLink } from '../domain/auth/CloudBusinessLink';
 import { cloudAuthServiceFactory } from '../infrastructure/cloud/CloudAuthServiceFactory';
 import { DeviceEnrollmentStorage } from '../infrastructure/auth/DeviceEnrollmentStorage';
 import { CloudBusinessLinkStorage } from '../infrastructure/auth/CloudBusinessLinkStorage';
+import { logAuditEventSafely } from '../application/audit/auditEventHelper';
 
 export type AuthStateMachineState =
   | 'BOOTING'
@@ -56,6 +57,7 @@ interface AuthContextType {
   activeBusinessName: string;
   activeOwnerName: string;
   activeCountryCode: SupportedCountryCode;
+  businessId: string | null;
 
   // Cloud Actions
   signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
@@ -117,6 +119,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   const [pendingDraftBusinessName, setPendingDraftBusinessName] = useState<string>('');
   const [pendingDraftCountryCode, setPendingDraftCountryCode] = useState<string>('CL');
   const [pendingDraftOwnerFirstName, setPendingDraftOwnerFirstName] = useState<string>('');
+  const [resolvedBusinessId, setResolvedBusinessId] = useState<string | null>(() => {
+    const enc = DeviceEnrollmentStorage.getEnrollment();
+    if (enc?.localBusinessId) return enc.localBusinessId;
+    const link = CloudBusinessLinkStorage.getLink();
+    if (link?.localBusinessId) return link.localBusinessId;
+    return null;
+  });
   const [pendingDraftOwnerLastName, setPendingDraftOwnerLastName] = useState<string>('');
   const [isLinkingModalOpen, setIsLinkingModalOpen] = useState(false);
 
@@ -276,6 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         const localLink = CloudBusinessLinkStorage.getLink();
         setDeviceEnrollment(localEnrollment);
         setCloudBusinessLink(localLink);
+        setResolvedBusinessId(result.business?.id || localEnrollment?.localBusinessId || localLink?.localBusinessId || null);
 
         if (localEnrollment) {
           if (result.sessionStatus === 'unlocked') {
@@ -601,6 +611,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       };
       CloudBusinessLinkStorage.saveLink(link);
       setCloudBusinessLink(link);
+
+      // Audit device enrollment
+      logAuditEventSafely({
+        businessId: cloudDevice.businessId,
+        eventCategory: 'DEVICE',
+        eventType: 'device.enrolled',
+        action: 'DEVICE_ENROLLED',
+        severity: 'INFO',
+        actorUserId: cloudDevice.userId,
+        actorNameSnapshot: activeOwnerName,
+        deviceId: cloudDevice.id,
+        deviceNameSnapshot: cloudDevice.deviceName,
+        entityType: 'DEVICE',
+        entityId: cloudDevice.id,
+        entityLabel: cloudDevice.deviceName,
+        summary: `Terminal enrolado: ${cloudDevice.deviceName} (${cloudDevice.platform})`,
+        metadata: {
+          platform: cloudDevice.platform,
+          deviceType: cloudDevice.deviceType,
+        },
+      });
 
       // If this PC already had local PIN and owner, transition directly to unlocked
       const owner = await userRepo.getOwnerUser();
@@ -947,6 +978,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     const verifyService = new VerifyPin(userRepo, pinVault);
     const result = await verifyService.execute(pin);
 
+    const primaryBiz = await businessRepo.getPrimaryBusiness().catch(() => null);
+    const bizId = primaryBiz?.id || cloudMembership?.businessId || deviceEnrollment?.cloudBusinessId || 'local-primary';
+
     if (result.isValid) {
       await sessionRepo.saveSession({
         status: 'unlocked',
@@ -962,6 +996,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       };
       setState(updated);
       onboardingRepository.save(updated);
+
+      logAuditEventSafely({
+        businessId: bizId,
+        eventCategory: 'AUTH',
+        eventType: 'auth.login.success',
+        action: 'PIN_LOGIN',
+        severity: 'INFO',
+        actorUserId: result.userId || 'usr-local-owner',
+        actorNameSnapshot: activeOwnerName,
+        actorRoleSnapshot: 'OWNER',
+        deviceId: deviceEnrollment?.deviceId || null,
+        deviceNameSnapshot: deviceEnrollment?.displayName || null,
+        entityType: 'SESSION',
+        entityId: result.userId || 'usr-local-owner',
+        summary: `Desbloqueo de terminal exitoso: ${activeOwnerName}`,
+      });
+    } else {
+      const isLocked = Boolean(result.isLockedOut);
+      logAuditEventSafely({
+        businessId: bizId,
+        eventCategory: 'AUTH',
+        eventType: isLocked ? 'auth.pin.locked' : 'auth.pin.failed',
+        action: isLocked ? 'PIN_LOCKOUT' : 'PIN_FAILED',
+        severity: isLocked ? 'CRITICAL' : 'WARNING',
+        actorUserId: result.userId || null,
+        actorNameSnapshot: activeOwnerName,
+        deviceId: deviceEnrollment?.deviceId || null,
+        deviceNameSnapshot: deviceEnrollment?.displayName || null,
+        entityType: 'SECURITY',
+        entityId: result.userId || 'device-pin',
+        summary: isLocked
+          ? 'Terminal bloqueado temporalmente por reiterados intentos fallidos de PIN'
+          : 'Intento fallido de desbloqueo con PIN',
+      });
     }
 
     return result;
@@ -977,6 +1045,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     };
     setState(updated);
     onboardingRepository.save(updated);
+
+    businessRepo.getPrimaryBusiness().then((biz) => {
+      const bizId = biz?.id || cloudMembership?.businessId || deviceEnrollment?.cloudBusinessId || 'local-primary';
+      logAuditEventSafely({
+        businessId: bizId,
+        eventCategory: 'AUTH',
+        eventType: 'auth.logout',
+        action: 'SESSION_LOCKED',
+        severity: 'INFO',
+        actorNameSnapshot: activeOwnerName,
+        deviceId: deviceEnrollment?.deviceId || null,
+        deviceNameSnapshot: deviceEnrollment?.displayName || null,
+        entityType: 'SESSION',
+        entityId: 'current-session',
+        summary: `Sesión bloqueada en terminal por ${activeOwnerName}`,
+      });
+    }).catch(() => {});
   };
 
   const resetOnboarding = () => {
@@ -1057,6 +1142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         activeBusinessName,
         activeOwnerName,
         activeCountryCode,
+        businessId: resolvedBusinessId,
         signInWithEmail,
         signUpWithEmail,
         setupCloudBusiness,

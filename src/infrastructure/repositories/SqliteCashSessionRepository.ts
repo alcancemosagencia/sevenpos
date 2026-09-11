@@ -9,6 +9,7 @@ import {
 import { InMemoryCashSessionRepository } from './InMemoryCashSessionRepository';
 import { logger } from '../logging/Logger';
 import { CurrencyCode } from '../../types/country';
+import { insertAuditRowInTransaction } from '../../application/audit/auditEventHelper';
 
 interface CashSessionRow {
   id: string;
@@ -224,6 +225,24 @@ export class SqliteCashSessionRepository implements CashSessionRepository {
         ]
       );
 
+      // 4. In-transaction Audit Event: Shift Opened
+      await insertAuditRowInTransaction(db, {
+        businessId: params.session.businessId,
+        eventCategory: 'CASH',
+        eventType: 'cash.shift.opened',
+        action: 'OPEN_SHIFT',
+        severity: 'INFO',
+        actorUserId: params.session.openedByUserId,
+        actorNameSnapshot: params.session.openedByNameSnapshot,
+        entityType: 'CASH_SESSION',
+        entityId: params.session.id,
+        summary: `Apertura de turno de caja (monto inicial: $${params.session.openingAmount.toLocaleString('es-CL')})`,
+        metadata: {
+          openingAmount: params.session.openingAmount,
+          cashRegisterId: params.session.cashRegisterId,
+        },
+      });
+
       await db.execute('COMMIT');
       return { ...params.session };
     } catch (err) {
@@ -283,6 +302,47 @@ export class SqliteCashSessionRepository implements CashSessionRepository {
         ]
       );
 
+      // In-transaction Audit Event: Shift Closed
+      await insertAuditRowInTransaction(db, {
+        businessId: params.businessId,
+        eventCategory: 'CASH',
+        eventType: 'cash.shift.closed',
+        action: 'CLOSE_SHIFT',
+        severity: 'INFO',
+        actorUserId: params.closedByUserId,
+        actorNameSnapshot: params.closedByNameSnapshot,
+        entityType: 'CASH_SESSION',
+        entityId: params.sessionId,
+        summary: `Cierre de turno de caja (esperado: $${params.expectedCashAmount.toLocaleString('es-CL')}, contado: $${params.countedCashAmount.toLocaleString('es-CL')})`,
+        metadata: {
+          expectedCashAmount: params.expectedCashAmount,
+          countedCashAmount: params.countedCashAmount,
+          differenceAmount: params.differenceAmount,
+          closingNote: params.closingNote || null,
+        },
+      });
+
+      // In-transaction Audit Event: Discrepancy Detected (if difference != 0)
+      if (params.differenceAmount !== 0) {
+        await insertAuditRowInTransaction(db, {
+          businessId: params.businessId,
+          eventCategory: 'CASH',
+          eventType: 'cash.discrepancy.detected',
+          action: 'DISCREPANCY',
+          severity: 'WARNING',
+          actorUserId: params.closedByUserId,
+          actorNameSnapshot: params.closedByNameSnapshot,
+          entityType: 'CASH_SESSION',
+          entityId: params.sessionId,
+          summary: `Diferencia de caja detectada en cierre: $${params.differenceAmount.toLocaleString('es-CL')}`,
+          metadata: {
+            expectedCashAmount: params.expectedCashAmount,
+            countedCashAmount: params.countedCashAmount,
+            differenceAmount: params.differenceAmount,
+          },
+        });
+      }
+
       await db.execute('COMMIT');
 
       const updatedRows: CashSessionRow[] = await db.select(
@@ -329,6 +389,27 @@ export class SqliteCashSessionRepository implements CashSessionRepository {
         movement.createdAt,
       ]
     );
+
+    if (movement.movementType === 'CASH_IN' || movement.movementType === 'CASH_OUT') {
+      insertAuditRowInTransaction(db, {
+        businessId: movement.businessId,
+        eventCategory: 'CASH',
+        eventType: 'cash.movement.created',
+        action: movement.movementType,
+        severity: 'INFO',
+        actorUserId: movement.createdByUserId,
+        actorNameSnapshot: movement.createdByNameSnapshot,
+        entityType: 'CASH_MOVEMENT',
+        entityId: movement.id,
+        summary: `Movimiento de caja manual (${movement.movementType}): $${movement.amount.toLocaleString('es-CL')} - ${movement.reason}`,
+        metadata: {
+          movementType: movement.movementType,
+          amount: movement.amount,
+          reason: movement.reason,
+          cashSessionId: movement.cashSessionId,
+        },
+      }).catch(() => {});
+    }
 
     return { ...movement };
   }

@@ -69,6 +69,11 @@ import { SqliteOperatingExpenseRepository } from './SqliteOperatingExpenseReposi
 import { InMemoryOperatingExpenseRepository } from './InMemoryOperatingExpenseRepository';
 import { SqliteExpenseQueryRepository } from './SqliteExpenseQueryRepository';
 import { InMemoryExpenseQueryRepository } from './InMemoryExpenseQueryRepository';
+import { AuditRepository } from '../../domain/audit/AuditRepository';
+import { AuditQueryRepository } from '../../domain/audit/AuditQueryRepository';
+import { SqliteAuditRepository } from './SqliteAuditRepository';
+import { InMemoryAuditRepository } from './InMemoryAuditRepository';
+import { AuditService } from '../../application/audit/AuditService';
 import { logger } from '../logging/Logger';
 
 export class RepositoryFactory {
@@ -95,6 +100,9 @@ export class RepositoryFactory {
   private expenseCategoryRepo: ExpenseCategoryRepository | null = null;
   private operatingExpenseRepo: OperatingExpenseRepository | null = null;
   private expenseQueryRepo: ExpenseQueryRepository | null = null;
+  private auditRepo: AuditRepository | null = null;
+  private auditQueryRepo: AuditQueryRepository | null = null;
+  private auditService: AuditService | null = null;
 
   getBusinessRepository(): BusinessRepository {
     if (this.businessRepo) {
@@ -507,6 +515,51 @@ export class RepositoryFactory {
     }
 
     return this.expenseQueryRepo;
+  }
+
+  getAuditRepository(): AuditRepository {
+    if (this.auditRepo) {
+      return this.auditRepo;
+    }
+
+    const fallback = new InMemoryAuditRepository();
+    if (isTauriEnvironment()) {
+      logger.info('RepositoryFactory', 'Instantiating SqliteAuditRepository (Write)');
+      this.auditRepo = new SqliteAuditRepository(databaseManager, fallback);
+    } else {
+      logger.info('RepositoryFactory', 'Instantiating InMemoryAuditRepository (Write) for development/testing');
+      this.auditRepo = fallback;
+    }
+
+    return this.auditRepo;
+  }
+
+  getAuditQueryRepository(): AuditQueryRepository {
+    if (this.auditQueryRepo) {
+      return this.auditQueryRepo;
+    }
+
+    const fallback = (this.auditRepo as InMemoryAuditRepository) || new InMemoryAuditRepository();
+    if (isTauriEnvironment()) {
+      logger.info('RepositoryFactory', 'Instantiating SqliteAuditRepository (Query)');
+      this.auditQueryRepo = new SqliteAuditRepository(databaseManager, fallback);
+    } else {
+      logger.info('RepositoryFactory', 'Instantiating InMemoryAuditRepository (Query) for development/testing');
+      this.auditQueryRepo = fallback;
+    }
+
+    return this.auditQueryRepo;
+  }
+
+  getAuditService(): AuditService {
+    if (this.auditService) {
+      return this.auditService;
+    }
+
+    const repo = this.getAuditRepository();
+    const queryRepo = this.getAuditQueryRepository();
+    this.auditService = new AuditService(repo, queryRepo);
+    return this.auditService;
   }
 }
 

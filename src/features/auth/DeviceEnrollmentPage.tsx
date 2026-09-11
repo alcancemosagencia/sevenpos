@@ -77,7 +77,7 @@ export const DeviceEnrollmentPage: React.FC<DeviceEnrollmentPageProps> = ({
       });
 
       if (!res.success) {
-        setErrorMessage(res.error || 'Error al enrolar dispositivo.');
+        setErrorMessage(res.error || 'Error al vincular dispositivo.');
       }
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : 'Error al registrar dispositivo.');
@@ -177,7 +177,7 @@ export const DeviceEnrollmentPage: React.FC<DeviceEnrollmentPageProps> = ({
             rightIcon={<ArrowRight size={16} />}
             className="w-full font-bold pt-2"
           >
-            Continuar a Crear PIN
+            Continuar a configurar PIN
           </Button>
         </form>
       </div>

@@ -78,13 +78,13 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
             <img src={sevenposLogo} alt="SevenPOS" className="h-8 w-auto object-contain" />
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold">
               <Sparkles size={13} />
-              <span>Cloud Identity</span>
+              <span>Acceso seguro</span>
             </div>
             <h2 className="text-2xl font-bold text-text-primary tracking-tight leading-tight">
-              Punto de Venta Local-First Profesional
+              Punto de venta profesional para tu negocio
             </h2>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Autentica tu cuenta para vincular este terminal a tu negocio y gestionar tus ventas con máxima rapidez.
+              Inicia sesión para acceder a tu negocio, vender con rapidez y mantener tu operación siempre bajo control.
             </p>
           </div>
 
@@ -97,7 +97,7 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
           </div>
 
           <div className="text-[11px] text-text-tertiary relative z-10">
-            SevenPOS Cloud Control Plane &copy; 2026
+            SevenPOS &copy; 2026
           </div>
         </div>
 
@@ -122,7 +122,7 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
                 </button>
               ) : (
                 <span className="lg:hidden text-[11px] font-semibold text-brand-primary bg-brand-primary/10 px-2.5 py-0.5 rounded-full ml-auto">
-                  Acceso Cloud
+                  Acceso seguro
                 </span>
               )}
             </div>
@@ -134,7 +134,7 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
               <p className="text-xs sm:text-sm text-text-secondary">
                 {isResetMode
                   ? 'Ingresa tu correo para recibir un enlace de restablecimiento.'
-                  : 'Inicia sesión para vincular este dispositivo a tu negocio.'}
+                  : 'Inicia sesión para acceder a tu negocio.'}
               </p>
             </div>
 
