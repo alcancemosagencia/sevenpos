@@ -88,6 +88,35 @@ export class InMemoryBusinessRepository implements BusinessRepository {
     }
   }
 
+  private meta: Map<string, string> = new Map();
+
+  async getMeta(key: string): Promise<string | null> {
+    if (this.meta.has(key)) return this.meta.get(key) || null;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(`sevenpos-meta-${key}`);
+        if (raw !== null) {
+          this.meta.set(key, raw);
+          return raw;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    return null;
+  }
+
+  async setMeta(key: string, value: string): Promise<void> {
+    this.meta.set(key, value);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(`sevenpos-meta-${key}`, value);
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
   async resetAll(): Promise<void> {
     this.business = null;
     this.settings = null;

@@ -35,7 +35,12 @@ describe('UX-HOTFIX-02A: Human Event Labels, Category Copy, and Fallback Safety'
     expect(getHumanEventLabel('product.updated')).toBe('Producto actualizado');
     expect(getHumanEventLabel('customer.created')).toBe('Cliente registrado');
     expect(getHumanEventLabel('customer.updated')).toBe('Cliente actualizado');
+    expect(getHumanEventLabel('settings.business_updated')).toBe('Datos del negocio actualizados');
     expect(getHumanEventLabel('settings.currency_updated')).toBe('Tasa de cambio actualizada');
+    expect(getHumanEventLabel('settings.pos_updated')).toBe('Preferencias de punto de venta actualizadas');
+    expect(getHumanEventLabel('settings.printing_updated')).toBe('Configuración de impresión actualizada');
+    expect(getHumanEventLabel('settings.inventory_updated')).toBe('Políticas de inventario actualizadas');
+    expect(getHumanEventLabel('auth.pin.changed')).toBe('PIN de acceso modificado');
   });
 
   it('correctly maps all 11 canonical category enums without exposing raw enum strings', () => {

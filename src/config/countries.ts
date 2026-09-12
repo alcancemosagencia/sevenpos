@@ -43,7 +43,7 @@ export const COUNTRY_PROFILES: Record<SupportedCountryCode, CountryProfile> = {
     primaryCurrency: {
       code: 'VES',
       symbol: 'Bs.',
-      name: 'Bolívar Digital',
+      name: 'Bolívar',
       decimals: 2,
       decimalSeparator: ',',
       thousandsSeparator: '.',
@@ -87,3 +87,17 @@ export function formatCurrency(
     ? `${sign}${currency.symbol} ${formattedAmount}`
     : `${sign}${formattedAmount} ${currency.symbol}`;
 }
+
+export function formatCountryName(countryCode: SupportedCountryCode): string {
+  switch (countryCode) {
+    case 'CL':
+      return 'Chile';
+    case 'CO':
+      return 'Colombia';
+    case 'VE':
+      return 'Venezuela';
+    default:
+      return countryCode;
+  }
+}
+

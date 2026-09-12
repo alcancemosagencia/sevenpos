@@ -186,6 +186,36 @@ export class SqliteBusinessRepository implements BusinessRepository {
     }
   }
 
+  async getMeta(key: string): Promise<string | null> {
+    try {
+      const db = await this.getDb();
+      const rows = await db.select<{ key: string; value: string }[]>(
+        'SELECT key, value FROM app_meta WHERE key = $1 LIMIT 1;',
+        [key]
+      );
+      if (!rows || rows.length === 0) return null;
+      return rows[0].value;
+    } catch (err) {
+      logger.error('SqliteBusinessRepository', 'Failed getMeta', { error: String(err) });
+      return null;
+    }
+  }
+
+  async setMeta(key: string, value: string): Promise<void> {
+    try {
+      const db = await this.getDb();
+      const now = new Date().toISOString();
+      await db.execute(
+        `INSERT INTO app_meta (key, value, updated_at) VALUES ($1, $2, $3)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;`,
+        [key, value, now]
+      );
+    } catch (err) {
+      logger.error('SqliteBusinessRepository', 'Failed setMeta', { error: String(err) });
+      throw err;
+    }
+  }
+
   async resetAll(): Promise<void> {
     try {
       const db = await this.getDb();

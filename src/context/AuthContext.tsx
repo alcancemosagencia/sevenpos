@@ -32,7 +32,7 @@ export type AuthStateMachineState =
   | 'CLOUD_CONFIGURATION_ERROR'
   | 'OFFLINE_NEW_DEVICE';
 
-interface AuthContextType {
+export interface AuthContextType {
   // Lifecycle & State Machine
   isHydrated: boolean;
   bootStatus: BootStatus;
@@ -91,7 +91,7 @@ interface AuthContextType {
   signOutCloudAccount: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOverride?: CloudAuthService }> = ({
   children,

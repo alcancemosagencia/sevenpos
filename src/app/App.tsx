@@ -43,6 +43,7 @@ import { CustomerDetailPage } from '../pages/CustomerDetailPage';
 import { ExpensesPage } from '../pages/ExpensesPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { AuditPage } from '../pages/AuditPage';
+import { SettingsPage } from '../pages/SettingsPage';
 
 // Navigation titles lookup
 const NAV_TITLES: Record<string, string> = {
@@ -61,7 +62,7 @@ const NAV_TITLES: Record<string, string> = {
   recharges: 'Recargas y Servicios',
   reports: 'Reportes e Inteligencia',
   audit: 'Auditoría y Seguridad',
-  settings: 'Configuración General',
+  settings: 'Configuración',
   help: 'Centro de Ayuda',
   subscription: 'Planes y Suscripción',
   logout: 'Cerrar Sesión',
@@ -303,7 +304,7 @@ const AppRoot: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowDiagnostics(true)}
-          className="fixed bottom-3 right-3 z-50 p-2 rounded-full bg-surface-secondary border border-border-default shadow-md hover:border-brand-primary text-text-tertiary hover:text-brand-primary transition-colors cursor-pointer text-xs flex items-center gap-1"
+          className="fixed bottom-20 right-3 sm:bottom-3 sm:right-3 z-50 p-2 rounded-full bg-surface-secondary/80 backdrop-blur-xs border border-border-default shadow-md hover:border-brand-primary text-text-tertiary hover:text-brand-primary transition-colors cursor-pointer text-xs flex items-center gap-1"
           title="Abrir Diagnósticos Técnicos (AG-03 / AG-04 Core)"
         >
           <Activity size={14} />
@@ -699,6 +700,10 @@ const AppRoot: React.FC = () => {
 
     if (activeNavId === 'audit') {
       return <AuditPage />;
+    }
+
+    if (activeNavId === 'settings') {
+      return <SettingsPage />;
     }
 
     return (

@@ -7,5 +7,7 @@ export interface BusinessRepository {
   saveBusinessWithSettings(business: Business, settings: BusinessSettings): Promise<void>;
   updateBusiness(business: Business): Promise<void>;
   updateSettings(settings: BusinessSettings): Promise<void>;
+  getMeta(key: string): Promise<string | null>;
+  setMeta(key: string, value: string): Promise<void>;
   resetAll(): Promise<void>;
 }

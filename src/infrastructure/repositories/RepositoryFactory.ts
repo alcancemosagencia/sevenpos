@@ -74,6 +74,7 @@ import { AuditQueryRepository } from '../../domain/audit/AuditQueryRepository';
 import { SqliteAuditRepository } from './SqliteAuditRepository';
 import { InMemoryAuditRepository } from './InMemoryAuditRepository';
 import { AuditService } from '../../application/audit/AuditService';
+import { SettingsService } from '../../application/settings/SettingsService';
 import { logger } from '../logging/Logger';
 
 export class RepositoryFactory {
@@ -103,6 +104,16 @@ export class RepositoryFactory {
   private auditRepo: AuditRepository | null = null;
   private auditQueryRepo: AuditQueryRepository | null = null;
   private auditService: AuditService | null = null;
+  private settingsService: SettingsService | null = null;
+
+  getSettingsService(): SettingsService {
+    if (this.settingsService) {
+      return this.settingsService;
+    }
+    const businessRepo = this.getBusinessRepository();
+    this.settingsService = new SettingsService(businessRepo);
+    return this.settingsService;
+  }
 
   getBusinessRepository(): BusinessRepository {
     if (this.businessRepo) {

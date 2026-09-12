@@ -38,8 +38,13 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   'customer.created': 'Cliente registrado',
   'customer.updated': 'Cliente actualizado',
 
-  // Settings & Configuration (Fixture supported)
+  // Settings & Configuration (AG-13)
+  'settings.business_updated': 'Datos del negocio actualizados',
   'settings.currency_updated': 'Tasa de cambio actualizada',
+  'settings.pos_updated': 'Preferencias de punto de venta actualizadas',
+  'settings.printing_updated': 'Configuración de impresión actualizada',
+  'settings.inventory_updated': 'Políticas de inventario actualizadas',
+  'auth.pin.changed': 'PIN de acceso modificado',
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -140,6 +145,15 @@ export function formatFriendlyMetadata(jsonString?: string | null): FriendlyMeta
       provider: 'Proveedor',
       businessName: 'Nombre del negocio',
       fiscalId: 'RUT / Identificador fiscal',
+      phone: 'Teléfono',
+      phonePrefix: 'Prefijo telefónico',
+      address: 'Dirección',
+      allowNegativeStock: 'Venta sin existencias',
+      confirmCheckout: 'Confirmar antes de cobrar',
+      showStockInGrid: 'Mostrar stock en grilla',
+      autoPrintReceipt: 'Impresión automática',
+      paperFormat: 'Formato de papel',
+      secondaryCurrencyEnabled: 'Moneda secundaria USD',
     };
 
     for (const [key, rawVal] of Object.entries(data)) {
