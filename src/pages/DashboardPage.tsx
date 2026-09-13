@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '../components/shell/PageHeader';
 import { PageContainer } from '../components/shell/PageContainer';
-import { Select } from '../components/ui/Select';
+import { DateRangeSelector } from '../components/ui/DateRangeSelector';
 import { Button } from '../components/ui/Button';
 import { DashboardKPIs } from '../features/dashboard/DashboardKPIs';
 import { DashboardSalesHistory } from '../features/dashboard/DashboardSalesHistory';
@@ -17,11 +17,13 @@ import { salesEventBus } from '../domain/sales/events/SalesEventBus';
 export interface DashboardPageProps {
   onNavigateToPos?: () => void;
   onNavigateToInventory?: () => void;
+  onNavigateToReports?: () => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigateToPos,
   onNavigateToInventory,
+  onNavigateToReports,
 }) => {
   const businessId = 'primary-business';
   const [period, setPeriod] = useState<DashboardPeriod>('today');
@@ -77,7 +79,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         actions={
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
             {/* Period selector */}
-            <Select
+            <DateRangeSelector
               options={periodOptions}
               value={period}
               onChange={(val) => setPeriod(val as DashboardPeriod)}
@@ -117,7 +119,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       <DashboardQuickActions
         onNewSale={onNavigateToPos}
         onAddInventory={onNavigateToInventory}
-        onViewReports={() => {}}
+        onViewReports={onNavigateToReports}
       />
     </PageContainer>
   );

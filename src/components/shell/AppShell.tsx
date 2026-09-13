@@ -10,6 +10,8 @@ export interface AppShellProps {
   businessName?: string;
   userName?: string;
   userRole?: string;
+  canManageSettings?: boolean;
+  onOpenSettings?: () => void;
   onLogout?: () => void;
   onSwitchUser?: () => void;
 }
@@ -22,6 +24,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   businessName,
   userName,
   userRole,
+  canManageSettings = true,
+  onOpenSettings,
   onLogout,
   onSwitchUser,
 }) => {
@@ -72,6 +76,8 @@ export const AppShell: React.FC<AppShellProps> = ({
           onSwitchUser={onSwitchUser}
           userName={userName}
           userRole={userRole}
+          canManageSettings={canManageSettings}
+          onOpenSettings={onOpenSettings || (() => onNavigate('settings'))}
           searchValue={searchValue}
           onSearch={setSearchValue}
         />

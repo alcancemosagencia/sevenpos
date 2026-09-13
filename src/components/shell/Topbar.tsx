@@ -21,6 +21,7 @@ export interface TopbarProps {
   onToggleMobileSidebar?: () => void;
   onOpenNotifications?: () => void;
   onOpenSettings?: () => void;
+  canManageSettings?: boolean;
   onSearch?: (query: string) => void;
   searchValue?: string;
   userName?: string;
@@ -35,6 +36,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onToggleSidebar,
   onToggleMobileSidebar,
   onOpenSettings,
+  canManageSettings = true,
   onSearch,
   searchValue = '',
   userName,
@@ -118,15 +120,17 @@ export const Topbar: React.FC<TopbarProps> = ({
         </IconButton>
 
         {/* Quick Settings Icon */}
-        <IconButton
-          variant="ghost"
-          size="sm"
-          ariaLabel="Configuración"
-          onClick={onOpenSettings}
-          className="text-text-secondary hover:text-text-primary"
-        >
-          <Settings size={16} />
-        </IconButton>
+        {canManageSettings && onOpenSettings && (
+          <IconButton
+            variant="ghost"
+            size="sm"
+            ariaLabel="Configuración"
+            onClick={onOpenSettings}
+            className="text-text-secondary hover:text-text-primary"
+          >
+            <Settings size={16} />
+          </IconButton>
+        )}
 
         {/* Operator Profile / Fast Switch Button */}
         {userName && (

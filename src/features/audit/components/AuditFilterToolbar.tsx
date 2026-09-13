@@ -4,7 +4,7 @@ import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { FilterToolbar } from '../../../components/ui/FilterToolbar';
 import { Select, SelectOption } from '../../../components/ui/Select';
-import { DateRangePickerDropdown } from '../../../components/analytics/DateRangePickerDropdown';
+import { DateRangeSelector } from '../../../components/ui/DateRangeSelector';
 import { DateRange } from '../../../application/analytics/types';
 import { AuditTabKey } from './AuditTabs';
 
@@ -99,7 +99,7 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
       {/* Filters & Actions Grid / Stack */}
       <div className="flex items-center flex-wrap gap-2">
         {/* Date Range Picker */}
-        <DateRangePickerDropdown
+        <DateRangeSelector
           currentRange={dateRange}
           onRangeChange={onDateRangeChange}
         />

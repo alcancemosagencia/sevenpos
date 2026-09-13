@@ -23,7 +23,6 @@ import {
   Users as UsersIcon,
   Monitor,
   Palette,
-  Settings as SettingsIcon,
 } from 'lucide-react';
 
 interface NavSectionItem {
@@ -248,10 +247,6 @@ export const SettingsPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 border-b border-border-default pb-4 sm:pb-5">
         <div>
-          <div className="flex items-center gap-2 text-text-tertiary text-xs font-semibold uppercase tracking-wider mb-0.5 sm:mb-1">
-            <SettingsIcon size={14} />
-            <span>Configuración</span>
-          </div>
           <h1 className="text-xl sm:text-2xl font-bold text-text-primary tracking-tight">Configuración</h1>
           <p className="text-xs text-text-secondary mt-0.5 sm:mt-1">
             Personaliza SevenPOS para que funcione como tu negocio.

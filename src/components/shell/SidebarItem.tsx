@@ -60,7 +60,7 @@ export const SidebarItem: React.FC<SidebarItemProps> = ({
           variant="neutral"
           size="sm"
           rounded="default"
-          className="text-[10px] py-0 px-1.5 font-mono text-text-tertiary border-border-default bg-surface/50"
+          className="hidden lg:inline-flex text-[10px] py-0 px-1.5 font-mono text-text-tertiary border-border-default bg-surface/50"
         >
           {shortcut}
         </Badge>

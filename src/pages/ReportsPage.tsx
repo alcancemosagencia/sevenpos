@@ -7,7 +7,7 @@ import { AnalyticsKpiCard } from '../components/analytics/AnalyticsKpiCard';
 import { SimpleBarChart } from '../components/analytics/SimpleBarChart';
 import { SimpleAreaChart } from '../components/analytics/SimpleAreaChart';
 import { DistributionBar } from '../components/analytics/DistributionBar';
-import { DateRangePickerDropdown } from '../components/analytics/DateRangePickerDropdown';
+import { DateRangeSelector } from '../components/ui/DateRangeSelector';
 import { ExportCsvModal } from '../components/analytics/ExportCsvModal';
 import { ReportsTabs, ReportTabKey } from '../components/analytics/ReportsTabs';
 import {
@@ -128,7 +128,7 @@ export const ReportsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <DateRangePickerDropdown
+          <DateRangeSelector
             currentRange={dateRange}
             onRangeChange={(newRange) => setDateRange(newRange)}
           />

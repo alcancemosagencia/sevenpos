@@ -47,6 +47,8 @@ import { ExpensesPage } from '../pages/ExpensesPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { AuditPage } from '../pages/AuditPage';
 import { SettingsPage } from '../pages/SettingsPage';
+import { HelpPage } from '../pages/HelpPage';
+import { isEditableTarget } from '../utils/keyboard';
 
 // Navigation titles lookup
 const NAV_TITLES: Record<string, string> = {
@@ -252,25 +254,6 @@ const AppRoot: React.FC = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
-  // Synchronize browser URL based on active navigation and auth machine state
-  useEffect(() => {
-    const targetRoute = resolveEntryRoute({
-      isHydrated,
-      authMachineState,
-      onboardingStatus,
-      sessionStatus,
-      isCompletionCelebrationActive,
-      requestedPath: typeof window !== 'undefined' ? window.location.pathname : undefined,
-    });
-
-    if (authMachineState === 'DEVICE_UNLOCKED') {
-      const targetNavRoute = getCanonicalPathForNavId(activeNavId);
-      syncBrowserUrl(targetNavRoute);
-    } else {
-      syncBrowserUrl(targetRoute);
-    }
-  }, [isHydrated, authMachineState, isCompletionCelebrationActive, onboardingStatus, sessionStatus, activeNavId]);
-
   const handleNavigateNav = (navId: string) => {
     if (navId.startsWith('/customers/')) {
       const custId = navId.replace('/customers/', '');
@@ -301,6 +284,44 @@ const AppRoot: React.FC = () => {
       setSelectedCustomerId(null);
     }
   };
+
+  // Synchronize browser URL based on active navigation and auth machine state
+  useEffect(() => {
+    const targetRoute = resolveEntryRoute({
+      isHydrated,
+      authMachineState,
+      onboardingStatus,
+      sessionStatus,
+      isCompletionCelebrationActive,
+      requestedPath: typeof window !== 'undefined' ? window.location.pathname : undefined,
+    });
+
+    if (authMachineState === 'DEVICE_UNLOCKED') {
+      const targetNavRoute = getCanonicalPathForNavId(activeNavId);
+      syncBrowserUrl(targetNavRoute);
+    } else {
+      syncBrowserUrl(targetRoute);
+    }
+  }, [isHydrated, authMachineState, isCompletionCelebrationActive, onboardingStatus, sessionStatus, activeNavId]);
+
+  // Global F2 keyboard shortcut to navigate to POS (guarded by pos.sell and isEditableTarget)
+  useEffect(() => {
+    if (authMachineState !== 'DEVICE_UNLOCKED') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        if (isEditableTarget(e.target)) return;
+        if (!can('pos.sell')) return;
+        e.preventDefault();
+        handleNavigateNav('pos');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [authMachineState, can]);
 
   function renderDevTools() {
     if (!import.meta.env.DEV) return null;
@@ -517,7 +538,13 @@ const AppRoot: React.FC = () => {
 
   const renderContent = () => {
     if (activeNavId === 'dashboard') {
-      return <DashboardPage onNavigateToPos={() => handleNavigateNav('pos')} />;
+      return (
+        <DashboardPage
+          onNavigateToPos={() => handleNavigateNav('pos')}
+          onNavigateToInventory={() => handleNavigateNav('stock')}
+          onNavigateToReports={() => handleNavigateNav('reports')}
+        />
+      );
     }
 
     if (activeNavId === 'pos') {
@@ -837,6 +864,15 @@ const AppRoot: React.FC = () => {
       return <SettingsPage />;
     }
 
+    if (activeNavId === 'help') {
+      return (
+        <HelpPage
+          onNavigateToPos={() => handleNavigateNav('pos')}
+          onNavigateToSettings={() => handleNavigateNav('settings')}
+        />
+      );
+    }
+
     return (
       <PlaceholderPage
         title={currentPageTitle}
@@ -861,6 +897,7 @@ const AppRoot: React.FC = () => {
         businessName={activeBusinessName}
         userName={effectiveUserName}
         userRole={effectiveUserRole}
+        canManageSettings={can('settings.manage')}
       >
         {!isCloudLinked && <LinkAccountBanner onOpenLinkModal={openLinkingModal} />}
         {renderContent()}
