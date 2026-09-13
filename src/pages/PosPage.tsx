@@ -26,17 +26,21 @@ import { useCountry } from '../context/CountryContext';
 import { formatMoney } from '../domain/common/money/Money';
 import { CurrencyCode } from '../types/country';
 
+import { useOperationalSession } from '../context/OperationalSessionContext';
+import { getUserDisplayName } from '../domain/user/User';
+
 interface PosWorkspaceContentProps {
   onNavigate: (route: string) => void;
 }
 
 const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate }) => {
   const { activeOwnerName } = useAuth();
+  const { currentOperator } = useOperationalSession();
   const { country } = useCountry();
   const currency = country.primaryCurrency.code as CurrencyCode;
   const businessId = 'primary-business';
-  const userId = 'primary-user';
-  const userName = activeOwnerName || 'Cajero';
+  const userId = currentOperator?.id || 'primary-user';
+  const userName = currentOperator ? getUserDisplayName(currentOperator) : (activeOwnerName || 'Cajero');
 
   const {
     items,

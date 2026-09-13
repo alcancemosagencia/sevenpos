@@ -38,13 +38,24 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   'customer.created': 'Cliente registrado',
   'customer.updated': 'Cliente actualizado',
 
-  // Settings & Configuration (AG-13)
+  // Settings & Configuration (AG-13 & AG-13B)
   'settings.business_updated': 'Datos del negocio actualizados',
   'settings.currency_updated': 'Tasa de cambio actualizada',
   'settings.pos_updated': 'Preferencias de punto de venta actualizadas',
   'settings.printing_updated': 'Configuración de impresión actualizada',
   'settings.inventory_updated': 'Políticas de inventario actualizadas',
   'auth.pin.changed': 'PIN de acceso modificado',
+
+  // User Management & Operational Auth (AG-13B)
+  'user.created': 'Usuario creado',
+  'user.updated': 'Usuario actualizado',
+  'user.deactivated': 'Usuario desactivado',
+  'user.reactivated': 'Usuario reactivado',
+  'user.role_changed': 'Rol de usuario modificado',
+  'user.pin_reset': 'PIN de usuario restablecido',
+  'user.session_started': 'Sesión de operador iniciada',
+  'user.session_ended': 'Sesión de operador finalizada',
+  'user.pin_failed': 'Intento de PIN de operador fallido',
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -154,6 +165,12 @@ export function formatFriendlyMetadata(jsonString?: string | null): FriendlyMeta
       autoPrintReceipt: 'Impresión automática',
       paperFormat: 'Formato de papel',
       secondaryCurrencyEnabled: 'Moneda secundaria USD',
+      targetUserName: 'Usuario objetivo',
+      targetUserId: 'ID de usuario',
+      oldRole: 'Rol anterior',
+      newRole: 'Nuevo rol',
+      userRole: 'Rol asignado',
+      activeStatus: 'Estado activo',
     };
 
     for (const [key, rawVal] of Object.entries(data)) {

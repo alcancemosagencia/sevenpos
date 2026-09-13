@@ -8,6 +8,7 @@ export type SettingsSectionId =
   | 'printing'
   | 'inventory'
   | 'security'
+  | 'users'
   | 'device'
   | 'appearance';
 

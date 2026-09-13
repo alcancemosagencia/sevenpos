@@ -24,6 +24,7 @@ export interface SidebarProps {
   businessName?: string;
   userName?: string;
   userRole?: string;
+  onSwitchUser?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -37,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   businessName = 'Mi Negocio',
   userName = 'Usuario principal',
   userRole = 'Dueño',
+  onSwitchUser,
 }) => {
   const handleItemClick = (id: string) => {
     if (id === 'logout' && onLogout) {
@@ -74,8 +76,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </IconButton>
         </div>
 
-        {/* User Identity Card on Mobile */}
-        <div className="px-4 py-3 border-b border-border-subtle shrink-0 bg-surface-secondary/30">
+        {/* User Identity Card on Mobile (Clickable for Fast Switch) */}
+        <div
+          onClick={() => {
+            if (onCloseMobile) onCloseMobile();
+            if (onSwitchUser) onSwitchUser();
+          }}
+          role="button"
+          tabIndex={0}
+          className="px-4 py-3 border-b border-border-subtle shrink-0 bg-surface-secondary/30 hover:bg-surface-secondary/60 cursor-pointer transition-colors"
+        >
           <div className="flex items-center gap-3">
             <Avatar name={userName} size="md" />
             <div className="min-w-0 flex-1">
@@ -86,6 +96,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {userRole} • {businessName}
               </p>
             </div>
+            <span className="text-[10px] text-brand-primary font-semibold px-2 py-0.5 rounded-full bg-brand-primary/10 border border-brand-primary/20 shrink-0">
+              Cambiar
+            </span>
           </div>
         </div>
 

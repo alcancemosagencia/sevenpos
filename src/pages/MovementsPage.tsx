@@ -17,6 +17,7 @@ import { ListMovements, MovementWithProduct } from '../application/inventory/Lis
 import { useCountry } from '../context/CountryContext';
 import { formatQuantity } from '../domain/common/quantity/Quantity';
 import { BaseUnitCode } from '../domain/common/unit/BaseUnit';
+import { useOperationalSession } from '../context/OperationalSessionContext';
 import { AddInventoryModal } from '../features/inventory/components/AddInventoryModal';
 import { AdjustInventoryModal } from '../features/inventory/components/AdjustInventoryModal';
 
@@ -39,6 +40,7 @@ export const MovementsPage: React.FC<MovementsPageProps> = ({
 }) => {
   const businessId = 'primary-business';
   const { formatMoney } = useCountry();
+  const { can } = useOperationalSession();
 
   const [loading, setLoading] = useState(true);
   const [movements, setMovements] = useState<MovementWithProduct[]>([]);
@@ -255,8 +257,12 @@ export const MovementsPage: React.FC<MovementsPageProps> = ({
                   <th className="py-3 px-4">Producto</th>
                   <th className="py-3 px-4 text-center">Tipo</th>
                   <th className="py-3 px-4 text-right">Cantidad</th>
-                  <th className="py-3 px-4 text-right">Costo unitario</th>
-                  <th className="py-3 px-4 text-right">Costo total</th>
+                  {can('financials.view_costs') && (
+                    <>
+                      <th className="py-3 px-4 text-right">Costo unitario</th>
+                      <th className="py-3 px-4 text-right">Costo total</th>
+                    </>
+                  )}
                   <th className="py-3 px-5">Motivo y notas</th>
                 </tr>
               </thead>
@@ -302,15 +308,17 @@ export const MovementsPage: React.FC<MovementsPageProps> = ({
                         </span>
                       </td>
 
-                      {/* Unit Cost */}
-                      <td className="py-3.5 px-4 text-right font-mono text-xs text-text-secondary whitespace-nowrap">
-                        {m.unitCost ? formatMoney(m.unitCost) : '—'}
-                      </td>
-
-                      {/* Total Cost */}
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-xs text-text-primary whitespace-nowrap">
-                        {m.totalCost ? formatMoney(m.totalCost) : '—'}
-                      </td>
+                      {/* Unit & Total Cost (Guarded) */}
+                      {can('financials.view_costs') && (
+                        <>
+                          <td className="py-3.5 px-4 text-right font-mono text-xs text-text-secondary whitespace-nowrap">
+                            {m.unitCost ? formatMoney(m.unitCost) : '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono font-semibold text-xs text-text-primary whitespace-nowrap">
+                            {m.totalCost ? formatMoney(m.totalCost) : '—'}
+                          </td>
+                        </>
+                      )}
 
                       {/* Reason & Notes */}
                       <td className="py-3.5 px-5 text-xs text-text-secondary">

@@ -14,6 +14,7 @@ import { Badge } from '../components/ui/Badge';
 import { useCountry } from '../context/CountryContext';
 import { formatMoney } from '../domain/common/money/Money';
 import { CurrencyCode } from '../types/country';
+import { useOperationalSession } from '../context/OperationalSessionContext';
 import {
   Users,
   Search,
@@ -38,6 +39,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
 }) => {
   const businessId = 'primary-business';
   const { country } = useCountry();
+  const { can } = useOperationalSession();
   const currency = country.primaryCurrency.code as CurrencyCode;
 
   const [customers, setCustomers] = useState<CustomerWithStats[]>([]);
@@ -126,25 +128,29 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
         subtitle="Gestiona tu cartera de clientes, historial de compras y métricas de fidelización."
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              leftIcon={<Download size={15} />}
-              onClick={() => setIsExportModalOpen(true)}
-              className="text-xs sm:text-sm"
-            >
-              Exportar clientes
-            </Button>
-            <Button
-              variant="primary"
-              leftIcon={<Plus size={16} />}
-              onClick={() => {
-                setCustomerToEdit(null);
-                setIsModalOpen(true);
-              }}
-              className="text-xs sm:text-sm"
-            >
-              Nuevo cliente
-            </Button>
+            {can('customers.export') && (
+              <Button
+                variant="secondary"
+                leftIcon={<Download size={15} />}
+                onClick={() => setIsExportModalOpen(true)}
+                className="text-xs sm:text-sm"
+              >
+                Exportar clientes
+              </Button>
+            )}
+            {can('customers.edit') && (
+              <Button
+                variant="primary"
+                leftIcon={<Plus size={16} />}
+                onClick={() => {
+                  setCustomerToEdit(null);
+                  setIsModalOpen(true);
+                }}
+                className="text-xs sm:text-sm"
+              >
+                Nuevo cliente
+              </Button>
+            )}
           </div>
         }
       />

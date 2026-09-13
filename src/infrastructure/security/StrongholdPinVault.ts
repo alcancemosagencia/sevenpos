@@ -96,6 +96,17 @@ export class StrongholdPinVault implements PinVault {
     }
   }
 
+  async removePinCredential(userId: string): Promise<void> {
+    try {
+      const store = await this.getStore();
+      await store.remove(userId);
+      await this.strongholdInstance?.save();
+      logger.info('StrongholdPinVault', `PIN credential removed for user: ${userId}`);
+    } catch (err) {
+      logger.error('StrongholdPinVault', 'Failed to removePinCredential in Stronghold', { error: String(err) });
+    }
+  }
+
   async resetVault(): Promise<void> {
     try {
       this.storeInstance = null;

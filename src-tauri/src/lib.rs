@@ -103,6 +103,12 @@ pub fn run() {
             sql: include_str!("../migrations/0009_audit.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "operational_users_rbac",
+            sql: include_str!("../migrations/0010_operational_users_rbac.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

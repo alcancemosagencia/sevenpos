@@ -54,6 +54,17 @@ export class WebCryptoPinVaultFallback implements PinVault {
     return false;
   }
 
+  async removePinCredential(userId: string): Promise<void> {
+    this.inMemoryStore.delete(userId);
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(`${FALLBACK_VAULT_KEY_PREFIX}${userId}`);
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
   async resetVault(): Promise<void> {
     this.inMemoryStore.clear();
     if (typeof localStorage !== 'undefined') {

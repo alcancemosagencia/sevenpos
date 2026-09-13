@@ -3,6 +3,7 @@ import { FileSpreadsheet, X, Download, AlertCircle, CheckCircle2 } from 'lucide-
 import { Button } from '../../../components/ui/Button';
 import { CustomerWithStats, getCustomerDisplayName } from '../../../domain/customers/Customer';
 import { downloadXlsx, downloadCsvLatam, formatExportFilename } from '../../../utils/excelExportUtils';
+import { useOperationalSession } from '../../../context/OperationalSessionContext';
 
 export interface ExportCustomersModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const ExportCustomersModal: React.FC<ExportCustomersModalProps> = ({
   customers,
   onSuccessToast,
 }) => {
+  const { can } = useOperationalSession();
   const [selectedFormat, setSelectedFormat] = useState<'xlsx' | 'csv'>('xlsx');
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +26,10 @@ export const ExportCustomersModal: React.FC<ExportCustomersModalProps> = ({
   if (!isOpen) return null;
 
   const handleDownload = async () => {
+    if (!can('customers.export')) {
+      setError('No tienes permisos para exportar clientes.');
+      return;
+    }
     try {
       setIsExporting(true);
       setError(null);

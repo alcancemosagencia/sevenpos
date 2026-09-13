@@ -21,14 +21,17 @@ import { CloseCashSession } from '../application/cash/CloseCashSession';
 import { AddCashMovement } from '../application/cash/AddCashMovement';
 import { GetCashSessionDetail, CashSessionDetailResult } from '../application/cash/GetCashSessionDetail';
 import { EnsureDefaultCashRegister } from '../application/cash/EnsureDefaultCashRegister';
+import { getUserDisplayName } from '../domain/user/User';
+import { useOperationalSession } from '../context/OperationalSessionContext';
 
 export const CashPage: React.FC = () => {
   const { activeOwnerName } = useAuth();
   const { country } = useCountry();
+  const { currentOperator } = useOperationalSession();
   const currency = country.primaryCurrency.code as CurrencyCode;
   const businessId = 'primary-business';
-  const userId = 'primary-user';
-  const userName = activeOwnerName || 'Cajero';
+  const userId = currentOperator?.id || 'primary-user';
+  const userName = currentOperator ? getUserDisplayName(currentOperator) : (activeOwnerName || 'Cajero');
 
   // Repositories & Use Cases
   const registerRepo = useMemo(() => repositoryFactory.getCashRegisterRepository(), []);

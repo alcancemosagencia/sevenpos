@@ -23,6 +23,7 @@ import { ProductPresentation } from '../domain/catalog/ProductPresentation';
 import { formatMoney } from '../domain/common/money/Money';
 import { getBaseUnitDefinition } from '../domain/common/unit/BaseUnit';
 import { CurrencyCode } from '../types/country';
+import { useOperationalSession } from '../context/OperationalSessionContext';
 import { PresentationModal } from '../features/catalog/components/PresentationModal';
 import { ProductImage } from '../components/ui/ProductImage';
 import { PageContainer } from '../components/shell/PageContainer';
@@ -40,6 +41,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   onEditProduct,
 }) => {
   const { state } = useAuth();
+  const { can } = useOperationalSession();
   const businessId = 'primary-business';
   const currency = (state.regionalSettings.primaryCurrencyCode as CurrencyCode) || 'CLP';
 
@@ -308,7 +310,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             <p className="text-2xl font-extrabold text-emerald-400 tabular-nums mt-0.5">
               {formatMoney(product.salePrice, currency)}
             </p>
-            {product.costPrice !== null && product.costPrice !== undefined && (
+            {can('financials.view_costs') && product.costPrice !== null && product.costPrice !== undefined && (
               <p className="text-xs text-text-tertiary mt-1">
                 Costo ref.: {formatMoney(product.costPrice, currency)}
               </p>

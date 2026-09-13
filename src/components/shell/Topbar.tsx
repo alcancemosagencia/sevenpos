@@ -3,7 +3,6 @@ import {
   Sun,
   Moon,
   Settings,
-  Bell,
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
@@ -12,6 +11,7 @@ import {
 import { IconButton } from '../ui/IconButton';
 import { SearchInput } from '../ui/SearchInput';
 import { Button } from '../ui/Button';
+import { Avatar } from '../ui/Avatar';
 import { useTheme } from '../../context/ThemeContext';
 
 export interface TopbarProps {
@@ -23,6 +23,9 @@ export interface TopbarProps {
   onOpenSettings?: () => void;
   onSearch?: (query: string) => void;
   searchValue?: string;
+  userName?: string;
+  userRole?: string;
+  onSwitchUser?: () => void;
   className?: string;
 }
 
@@ -31,10 +34,12 @@ export const Topbar: React.FC<TopbarProps> = ({
   isSidebarCollapsed,
   onToggleSidebar,
   onToggleMobileSidebar,
-  onOpenNotifications,
   onOpenSettings,
   onSearch,
   searchValue = '',
+  userName,
+  userRole,
+  onSwitchUser,
   className = '',
 }) => {
   const { theme, toggleTheme } = useTheme();
@@ -123,19 +128,21 @@ export const Topbar: React.FC<TopbarProps> = ({
           <Settings size={16} />
         </IconButton>
 
-        {/* Notifications Icon with dot */}
-        <div className="relative">
-          <IconButton
-            variant="ghost"
-            size="sm"
-            ariaLabel="Notificaciones"
-            onClick={onOpenNotifications}
-            className="text-text-secondary hover:text-text-primary"
+        {/* Operator Profile / Fast Switch Button */}
+        {userName && (
+          <button
+            type="button"
+            onClick={onSwitchUser}
+            className="flex items-center gap-2 py-1 px-2 rounded-full border border-border-default hover:border-brand-primary/50 bg-surface-secondary/40 hover:bg-surface-secondary transition-all cursor-pointer text-left shrink-0"
+            title="Cambiar operador (Fast Switch)"
           >
-            <Bell size={16} />
-          </IconButton>
-          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-status-danger ring-2 ring-background" />
-        </div>
+            <Avatar name={userName} size="sm" />
+            <div className="hidden sm:block min-w-0 pr-1">
+              <p className="text-[11px] font-bold text-text-primary leading-tight truncate max-w-[90px]">{userName}</p>
+              <p className="text-[9px] text-text-tertiary leading-tight truncate">{userRole || 'Operador'}</p>
+            </div>
+          </button>
+        )}
       </div>
     </header>
   );

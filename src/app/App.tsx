@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from '../context/ThemeContext';
 import { CountryProvider } from '../context/CountryContext';
 import { AuthProvider, useAuth } from '../context/AuthContext';
+import { OperationalSessionProvider, useOperationalSession } from '../context/OperationalSessionContext';
+import { getUserDisplayName, formatUserRole } from '../domain/user/User';
+import { FastSwitchUserModal } from '../components/auth/FastSwitchUserModal';
 import { AppShell } from '../components/shell/AppShell';
 import { DashboardPage } from '../pages/DashboardPage';
 import { PlaceholderPage } from '../pages/PlaceholderPage';
@@ -21,7 +24,7 @@ import { DatabaseBootErrorScreen } from '../components/errors/DatabaseBootErrorS
 import { DiagnosticsModal } from '../components/dev/DiagnosticsModal';
 import { ScannerSimulatorModal } from '../components/dev/ScannerSimulatorModal';
 import { syncBrowserUrl, normalizeProtectedPath, resolveEntryRoute, AppRoute } from '../application/routing/RouteResolver';
-import { Activity, WifiOff, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Activity, WifiOff, AlertTriangle, RotateCcw, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 
 import { ProductsListPage } from '../pages/ProductsListPage';
@@ -205,6 +208,8 @@ const AppRoot: React.FC = () => {
     sessionStatus,
     state,
   } = useAuth();
+
+  const { currentOperator, activeRole, can, openFastSwitchModal } = useOperationalSession();
 
   const [activeNavId, setActiveNavId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -620,10 +625,46 @@ const AppRoot: React.FC = () => {
     }
 
     if (activeNavId === 'stock-adjustments') {
+      if (!can('inventory.adjust')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Tu rol actual ({formatUserRole(activeRole)}) no tiene permisos para realizar ajustes de inventario.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       return <MovementsPage onBackToInventory={() => handleNavigateNav('stock')} />;
     }
 
     if (activeNavId === 'purchase-orders') {
+      if (!can('purchases.manage')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Tu rol actual ({formatUserRole(activeRole)}) no tiene permisos para administrar compras y proveedores.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       if (purchaseOrderSubView === 'new') {
         return (
           <NewPurchaseOrderPage
@@ -659,6 +700,24 @@ const AppRoot: React.FC = () => {
     }
 
     if (activeNavId === 'suppliers') {
+      if (!can('purchases.manage')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Tu rol actual ({formatUserRole(activeRole)}) no tiene permisos para acceder al directorio de proveedores.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       return <SuppliersPage />;
     }
 
@@ -667,6 +726,24 @@ const AppRoot: React.FC = () => {
     }
 
     if (activeNavId === 'expenses') {
+      if (!can('expenses.manage')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Tu rol actual ({formatUserRole(activeRole)}) no tiene permisos para registrar o consultar gastos operativos.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       return <ExpensesPage />;
     }
 
@@ -695,14 +772,68 @@ const AppRoot: React.FC = () => {
     }
 
     if (activeNavId === 'reports') {
+      if (!can('reports.view')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Tu rol actual ({formatUserRole(activeRole)}) no tiene permisos para ver los reportes comerciales e inteligencia.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       return <ReportsPage />;
     }
 
     if (activeNavId === 'audit') {
+      if (!can('audit.view')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Solo los Propietarios pueden consultar la bitácora de auditoría y eventos de seguridad.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       return <AuditPage />;
     }
 
     if (activeNavId === 'settings') {
+      if (!can('settings.manage')) {
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-3xl bg-status-danger/10 text-status-danger flex items-center justify-center border border-status-danger/20 shadow-xs">
+              <ShieldAlert size={28} />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-text-primary">Acceso restringido</h2>
+              <p className="text-xs text-text-secondary max-w-sm">
+                Solo los Propietarios pueden modificar la configuración general y usuarios del negocio.
+              </p>
+            </div>
+            <Button variant="secondary" size="md" leftIcon={<ArrowLeft size={15} />} onClick={() => handleNavigateNav('pos')}>
+              Ir al Punto de Venta
+            </Button>
+          </div>
+        );
+      }
       return <SettingsPage />;
     }
 
@@ -714,16 +845,22 @@ const AppRoot: React.FC = () => {
     );
   };
 
+  const effectiveUserName = currentOperator
+    ? getUserDisplayName(currentOperator)
+    : activeOwnerName || 'Usuario principal';
+  const effectiveUserRole = formatUserRole(activeRole);
+
   return (
     <>
       <AppShell
         activeNavId={activeNavId}
         onNavigate={handleNavigateNav}
         onLogout={lockSession}
+        onSwitchUser={openFastSwitchModal}
         pageTitle={currentPageTitle}
         businessName={activeBusinessName}
-        userName={activeOwnerName}
-        userRole="Dueño"
+        userName={effectiveUserName}
+        userRole={effectiveUserRole}
       >
         {!isCloudLinked && <LinkAccountBanner onOpenLinkModal={openLinkingModal} />}
         {renderContent()}
@@ -733,11 +870,12 @@ const AppRoot: React.FC = () => {
         onClose={closeLinkingModal}
         localBusinessName={activeBusinessName}
         localCountryCode={activeCountryCode}
-        localOwnerFirstName={state.owner.firstName}
-        localOwnerLastName={state.owner.lastName}
+        localOwnerFirstName={state?.owner?.firstName || 'Propietario'}
+        localOwnerLastName={state?.owner?.lastName || ''}
         onLinkWithNewAccount={linkExistingLocalBusinessWithNewAccount}
         onLinkWithExistingAccount={linkExistingLocalBusinessWithExistingAccount}
       />
+      <FastSwitchUserModal />
       {renderDevTools()}
     </>
   );
@@ -749,7 +887,9 @@ export const App: React.FC = () => {
       <ThemeProvider>
         <CountryProvider>
           <AuthProvider>
-            <AppRoot />
+            <OperationalSessionProvider>
+              <AppRoot />
+            </OperationalSessionProvider>
           </AuthProvider>
         </CountryProvider>
       </ThemeProvider>
@@ -758,3 +898,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+

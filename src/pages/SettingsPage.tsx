@@ -8,6 +8,7 @@ import { PosSection } from '../features/settings/components/PosSection';
 import { PrintingSection } from '../features/settings/components/PrintingSection';
 import { InventorySection } from '../features/settings/components/InventorySection';
 import { SecuritySection } from '../features/settings/components/SecuritySection';
+import { UsersSection } from '../features/settings/components/UsersSection';
 import { DeviceSection } from '../features/settings/components/DeviceSection';
 import { AppearanceSection } from '../features/settings/components/AppearanceSection';
 import { UnsavedChangesModal } from '../features/settings/components/UnsavedChangesModal';
@@ -19,6 +20,7 @@ import {
   Printer,
   Boxes,
   ShieldCheck,
+  Users as UsersIcon,
   Monitor,
   Palette,
   Settings as SettingsIcon,
@@ -37,16 +39,24 @@ const SETTINGS_SECTIONS: NavSectionItem[] = [
   { id: 'printing', label: 'Tickets e Impresión', icon: Printer },
   { id: 'inventory', label: 'Inventario', icon: Boxes },
   { id: 'security', label: 'Seguridad y Acceso', icon: ShieldCheck },
+  { id: 'users', label: 'Usuarios y permisos', icon: UsersIcon },
   { id: 'device', label: 'Dispositivo', icon: Monitor },
   { id: 'appearance', label: 'Apariencia', icon: Palette },
 ];
 
 export const SettingsPage: React.FC = () => {
-  const { businessId, activeOwnerName, cloudUser, deviceEnrollment } = useAuth();
+  const { businessId, activeOwnerName, cloudUser, cloudMembership, state, deviceEnrollment } = useAuth();
   const currentBusinessId = businessId || 'primary-business';
   const currentUserId = cloudUser?.id || 'primary-user';
   const currentUserName = activeOwnerName || 'Administrador';
   const currentDeviceId = deviceEnrollment?.deviceId || 'local-device';
+
+  // Unequivocal Owner Email resolution
+  const ownerEmail = (cloudMembership?.role === 'OWNER' && cloudUser?.email)
+    ? cloudUser.email
+    : (cloudUser?.email && state?.owner?.email === cloudUser.email)
+    ? cloudUser.email
+    : (state?.owner?.email || null);
 
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [pendingSection, setPendingSection] = useState<SettingsSectionId | null>(null);
@@ -307,6 +317,7 @@ export const SettingsPage: React.FC = () => {
               {activeSection === 'general' && generalData && (
                 <GeneralSection
                   initialData={generalData}
+                  ownerEmail={ownerEmail}
                   onSave={handleSaveGeneral}
                   onDirtyChange={setIsCurrentDirty}
                 />
@@ -347,6 +358,10 @@ export const SettingsPage: React.FC = () => {
 
               {activeSection === 'security' && (
                 <SecuritySection onSavePin={handleSavePin} />
+              )}
+
+              {activeSection === 'users' && (
+                <UsersSection />
               )}
 
               {activeSection === 'device' && deviceData && (

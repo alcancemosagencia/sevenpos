@@ -10,12 +10,14 @@ import { Check, Info, Save } from 'lucide-react';
 
 interface GeneralSectionProps {
   initialData: GeneralSettingsForm;
+  ownerEmail?: string | null;
   onSave: (data: GeneralSettingsForm) => Promise<{ success: boolean; error?: string }>;
   onDirtyChange: (isDirty: boolean) => void;
 }
 
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
   initialData,
+  ownerEmail,
   onSave,
   onDirtyChange,
 }) => {
@@ -149,6 +151,21 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
               <span>{formatCountryName(form.countryCode)}</span>
             </Badge>
             <span className="text-xs text-text-tertiary flex items-center gap-1">
+              <Info size={13} />
+              Solo lectura
+            </span>
+          </div>
+        </SettingRow>
+
+        <SettingRow
+          label="Correo del propietario"
+          description="Correo asociado a la cuenta propietaria de SevenPOS."
+        >
+          <div className="w-full md:w-80 flex items-center justify-between md:justify-end gap-2.5">
+            <span className="text-sm font-medium text-text-primary truncate">
+              {ownerEmail ? ownerEmail : 'Cuenta no vinculada'}
+            </span>
+            <span className="text-xs text-text-tertiary flex items-center gap-1 shrink-0">
               <Info size={13} />
               Solo lectura
             </span>

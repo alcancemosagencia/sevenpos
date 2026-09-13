@@ -77,9 +77,13 @@ import { AuditService } from '../../application/audit/AuditService';
 import { SettingsService } from '../../application/settings/SettingsService';
 import { logger } from '../logging/Logger';
 
+import { OperationalUserService } from '../../application/user/OperationalUserService';
+import { pinVaultFactory } from '../security/PinVaultFactory';
+
 export class RepositoryFactory {
   private businessRepo: BusinessRepository | null = null;
   private userRepo: UserRepository | null = null;
+  private operationalUserService: OperationalUserService | null = null;
   private categoryRepo: CategoryRepository | null = null;
   private productRepo: ProductRepository | null = null;
   private presentationRepo: ProductPresentationRepository | null = null;
@@ -105,6 +109,16 @@ export class RepositoryFactory {
   private auditQueryRepo: AuditQueryRepository | null = null;
   private auditService: AuditService | null = null;
   private settingsService: SettingsService | null = null;
+
+  getOperationalUserService(): OperationalUserService {
+    if (this.operationalUserService) {
+      return this.operationalUserService;
+    }
+    const userRepo = this.getUserRepository();
+    const pinVault = pinVaultFactory.getPinVault();
+    this.operationalUserService = new OperationalUserService(userRepo, pinVault);
+    return this.operationalUserService;
+  }
 
   getSettingsService(): SettingsService {
     if (this.settingsService) {

@@ -11,6 +11,7 @@ export interface AppShellProps {
   userName?: string;
   userRole?: string;
   onLogout?: () => void;
+  onSwitchUser?: () => void;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
@@ -22,6 +23,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   userName,
   userRole,
   onLogout,
+  onSwitchUser,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -51,6 +53,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         activeNavId={activeNavId}
         onNavigate={onNavigate}
         onLogout={onLogout}
+        onSwitchUser={onSwitchUser}
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileOpen}
         onCloseMobile={closeMobileSidebar}
@@ -66,6 +69,9 @@ export const AppShell: React.FC<AppShellProps> = ({
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={toggleSidebar}
           onToggleMobileSidebar={toggleMobileSidebar}
+          onSwitchUser={onSwitchUser}
+          userName={userName}
+          userRole={userRole}
           searchValue={searchValue}
           onSearch={setSearchValue}
         />
