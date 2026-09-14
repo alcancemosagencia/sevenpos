@@ -4,7 +4,7 @@ import { Input } from '../../../components/ui/Input';
 import { Button } from '../../../components/ui/Button';
 import { FilterToolbar } from '../../../components/ui/FilterToolbar';
 import { Select, SelectOption } from '../../../components/ui/Select';
-import { DateRangeSelector } from '../../../components/ui/DateRangeSelector';
+import { DateRangeSelector, DateRangeOption, DateRangeSelectorPreset } from '../../../components/ui/DateRangeSelector';
 import { DateRange } from '../../../application/analytics/types';
 import { AuditTabKey } from './AuditTabs';
 
@@ -18,6 +18,8 @@ export interface AuditFilterToolbarProps {
   onSeverityChange: (severity: string) => void;
   dateRange: DateRange;
   onDateRangeChange: (range: DateRange) => void;
+  presets?: DateRangeSelectorPreset[];
+  onLockedOptionSelect?: (option: DateRangeOption | DateRangeSelectorPreset) => void;
   onRefresh: () => void;
   onExportCsv: () => void;
   isLoading?: boolean;
@@ -33,6 +35,8 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
   onSeverityChange,
   dateRange,
   onDateRangeChange,
+  presets,
+  onLockedOptionSelect,
   onRefresh,
   onExportCsv,
   isLoading,
@@ -102,6 +106,8 @@ export const AuditFilterToolbar: React.FC<AuditFilterToolbarProps> = ({
         <DateRangeSelector
           currentRange={dateRange}
           onRangeChange={onDateRangeChange}
+          presets={presets}
+          onLockedOptionSelect={onLockedOptionSelect}
         />
 
         {/* Category Non-Native Select */}

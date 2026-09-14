@@ -13,15 +13,22 @@ import { AuditEventDetailModal } from '../features/audit/components/AuditEventDe
 import { ExportAuditCsvModal } from '../features/audit/components/ExportAuditCsvModal';
 import { resolveDateRange } from '../application/analytics/DateRangeUtils';
 import { DateRange } from '../application/analytics/types';
+import { DateRangeSelectorPreset } from '../components/ui/DateRangeSelector';
+import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
 
 export const AuditPage: React.FC = () => {
   const { businessId } = useAuth();
+
+  // Subscription state
+  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'PRO'>('FREE');
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState<string | undefined>(undefined);
 
   const [activeTab, setActiveTab] = useState<AuditTabKey>('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('');
-  const [dateRange, setDateRange] = useState<DateRange>(() => resolveDateRange('THIS_MONTH'));
+  const [dateRange, setDateRange] = useState<DateRange>(() => resolveDateRange('TODAY'));
   const [offset, setOffset] = useState(0);
   const limit = 20;
 
@@ -79,6 +86,10 @@ export const AuditPage: React.FC = () => {
     }
     setIsLoading(true);
     try {
+      const subRepo = repositoryFactory.getSubscriptionRepository();
+      const sub = await subRepo.getSubscription(businessId);
+      setCurrentPlan(sub.plan);
+
       const auditService = repositoryFactory.getAuditService();
       const [queryResult, kpiResult] = await Promise.all([
         auditService.queryEvents(businessId, activeFilters),
@@ -162,6 +173,46 @@ export const AuditPage: React.FC = () => {
     );
   }
 
+  const auditPresets: DateRangeSelectorPreset[] = [
+    { key: 'TODAY', label: 'Hoy' },
+    { key: 'YESTERDAY', label: 'Ayer' },
+    {
+      key: 'LAST_7_DAYS',
+      label: 'Últimos 7 días',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'LAST_30_DAYS',
+      label: 'Últimos 30 días',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'THIS_MONTH',
+      label: 'Este mes',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'LAST_MONTH',
+      label: 'Mes anterior',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'CUSTOM',
+      label: 'Personalizado',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+  ];
+
+  const handleLockedPresetSelect = () => {
+    setUpgradeModalMessage('El Plan Pro desbloquea el histórico completo de auditoría y eventos de seguridad sin límites.');
+    setIsUpgradeModalOpen(true);
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -210,6 +261,8 @@ export const AuditPage: React.FC = () => {
           setDateRange(r);
           setOffset(0);
         }}
+        presets={auditPresets}
+        onLockedOptionSelect={handleLockedPresetSelect}
         onRefresh={loadData}
         onExportCsv={() => setIsExportOpen(true)}
         isLoading={isLoading}
@@ -251,6 +304,14 @@ export const AuditPage: React.FC = () => {
         filters={activeFilters}
         totalEventsCount={totalCount}
         onSuccessToast={showToast}
+      />
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePromptModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        title="Historial de auditoría en Plan Pro"
+        message={upgradeModalMessage || 'El Plan Pro desbloquea el historial completo de eventos de auditoría y seguridad.'}
       />
 
       {/* Toast notification */}

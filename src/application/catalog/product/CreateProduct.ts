@@ -3,6 +3,8 @@ import { ProductRepository } from '../../../domain/catalog/ProductRepository';
 import { CatalogIdentifierRepository } from '../../../domain/catalog/CatalogIdentifierRepository';
 import { ProductIdentifierService } from '../../../domain/catalog/ProductIdentifierService';
 import { BaseUnitCode } from '../../../domain/common/unit/BaseUnit';
+import { IEntitlementService } from '../../subscription/IEntitlementService';
+import { repositoryFactory } from '../../../infrastructure/repositories/RepositoryFactory';
 
 export interface CreateProductDTO {
   businessId: string;
@@ -21,15 +23,27 @@ export interface CreateProductDTO {
 
 export class CreateProduct {
   private identifierService: ProductIdentifierService;
+  private entitlementService: IEntitlementService;
 
   constructor(
     private productRepo: ProductRepository,
-    private identifierRepo: CatalogIdentifierRepository
+    private identifierRepo: CatalogIdentifierRepository,
+    entitlementService?: IEntitlementService
   ) {
     this.identifierService = new ProductIdentifierService(identifierRepo);
+    this.entitlementService = entitlementService || repositoryFactory.getEntitlementService();
   }
 
   async execute(dto: CreateProductDTO): Promise<{ success: boolean; product?: Product; error?: string }> {
+    // 0. Authoritative entitlement limit enforcement
+    const limitDecision = await this.entitlementService.checkLimit(dto.businessId, 'catalog.active_products');
+    if (!limitDecision.allowed) {
+      return {
+        success: false,
+        error: limitDecision.message || 'Límite de productos alcanzado en tu plan actual.',
+      };
+    }
+
     const trimmedName = dto.name ? dto.name.trim() : '';
     const normSku = normalizeSku(dto.sku);
     const normBarcode = normalizeBarcode(dto.barcode);

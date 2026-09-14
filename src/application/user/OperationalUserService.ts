@@ -4,6 +4,8 @@ import { PinVault } from '../../domain/auth/PinVault';
 import { pinLockoutManager } from '../../domain/auth/PinLockoutManager';
 import { PermissionService } from '../../domain/auth/Permissions';
 import { logAuditEventSafely } from '../audit/auditEventHelper';
+import { IEntitlementService } from '../subscription/IEntitlementService';
+import { repositoryFactory } from '../../infrastructure/repositories/RepositoryFactory';
 
 export interface CreateUserInput {
   businessId: string;
@@ -25,10 +27,15 @@ export interface UpdateUserInput {
 }
 
 export class OperationalUserService {
+  private entitlementService: IEntitlementService;
+
   constructor(
     private userRepository: UserRepository,
-    private pinVault: PinVault
-  ) {}
+    private pinVault: PinVault,
+    entitlementService?: IEntitlementService
+  ) {
+    this.entitlementService = entitlementService || repositoryFactory.getEntitlementService();
+  }
 
   async getUsers(businessId: string): Promise<User[]> {
     return this.userRepository.getUsersByBusinessId(businessId);
@@ -80,6 +87,16 @@ export class OperationalUserService {
 
     if (!isBootstrap && actorUser && !PermissionService.can(actorUser.role, 'users.manage')) {
       return { success: false, error: 'No tienes permisos para administrar usuarios.' };
+    }
+
+    if (!isBootstrap) {
+      const limitDecision = await this.entitlementService.checkLimit(input.businessId, 'users.active_operators');
+      if (!limitDecision.allowed) {
+        return {
+          success: false,
+          error: limitDecision.message || 'Límite de usuarios alcanzado en tu plan actual.',
+        };
+      }
     }
 
     const rawName = (input.firstName || input.fullName || input.name || '').trim();
@@ -418,6 +435,14 @@ export class OperationalUserService {
   ): Promise<{ success: boolean; error?: string }> {
     if (!PermissionService.can(actorUser.role, 'users.manage')) {
       return { success: false, error: 'No tienes permisos para reactivar usuarios.' };
+    }
+
+    const limitDecision = await this.entitlementService.checkLimit(actorUser.businessId, 'users.active_operators');
+    if (!limitDecision.allowed) {
+      return {
+        success: false,
+        error: limitDecision.message || 'Límite de usuarios alcanzado en tu plan actual.',
+      };
     }
 
     const targetUser = await this.userRepository.getUserById(userId);

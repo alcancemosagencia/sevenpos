@@ -17,6 +17,7 @@ import { PageContainer } from '../components/shell/PageContainer';
 import { PageHeader } from '../components/shell/PageHeader';
 import { Button } from '../components/ui/Button';
 import { IconButton } from '../components/ui/IconButton';
+import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
 
 import { CurrencyCode } from '../types/country';
 
@@ -47,6 +48,7 @@ export const ProductsListPage: React.FC<ProductsListPageProps> = ({
   const [pageSize] = useState(20);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [isProImportModalOpen, setIsProImportModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
   // Data states
   const [items, setItems] = useState<ProductListItem[]>([]);
@@ -145,6 +147,16 @@ export const ProductsListPage: React.FC<ProductsListPageProps> = ({
     setPage(1);
   };
 
+  const handleNewProductClick = async () => {
+    const entitlementService = repositoryFactory.getEntitlementService();
+    const decision = await entitlementService.checkLimit(businessId, 'catalog.active_products');
+    if (!decision.allowed) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    onNavigateToNewProduct();
+  };
+
   const hasAnyFilter = Boolean(query || categoryId || status !== 'all' || hasPresentations !== undefined);
 
   return (
@@ -185,7 +197,7 @@ export const ProductsListPage: React.FC<ProductsListPageProps> = ({
             <Button
               variant="primary"
               size="md"
-              onClick={onNavigateToNewProduct}
+              onClick={handleNewProductClick}
               leftIcon={<Plus size={16} />}
               className="w-full sm:w-auto"
             >
@@ -370,6 +382,14 @@ export const ProductsListPage: React.FC<ProductsListPageProps> = ({
           )}
         </>
       )}
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePromptModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        title="Límite de productos alcanzado"
+        message="Has alcanzado los 100 productos activos incluidos en SevenPOS Free. Actualiza a SevenPOS Pro para registrar productos ilimitados."
+      />
     </PageContainer>
   );
 };

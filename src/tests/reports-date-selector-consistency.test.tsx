@@ -28,6 +28,6 @@ describe('Reports Date Selector Consistency', () => {
     );
 
     expect(html).toContain('daterange-selector-btn');
-    expect(html).toContain('Este mes');
+    expect(html).toContain('Últimos 7 días');
   });
 });

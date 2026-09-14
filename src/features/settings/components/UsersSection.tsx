@@ -12,6 +12,7 @@ import { EditUserModal } from './EditUserModal';
 import { ChangeUserRoleModal } from './ChangeUserRoleModal';
 import { ResetUserPinModal } from './ResetUserPinModal';
 import { DeactivateUserModal } from './DeactivateUserModal';
+import { UpgradePromptModal } from '../../../components/subscription/UpgradePromptModal';
 import {
   Users as UsersIcon,
   UserPlus,
@@ -42,6 +43,7 @@ export const UsersSection: React.FC = () => {
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [changingRoleUser, setChangingRoleUser] = useState<User | null>(null);
   const [resettingPinUser, setResettingPinUser] = useState<User | null>(null);
@@ -176,6 +178,15 @@ export const UsersSection: React.FC = () => {
     const target = users.find((u) => u.id === userId);
     if (!target) return { success: false, error: 'Usuario no encontrado' };
 
+    if (!target.active) {
+      const entitlementService = repositoryFactory.getEntitlementService();
+      const decision = await entitlementService.checkLimit(currentBusinessId, 'users.active_operators');
+      if (!decision.allowed) {
+        setIsUpgradeModalOpen(true);
+        return { success: false, error: decision.message || 'Límite de usuarios alcanzado' };
+      }
+    }
+
     let res;
     if (target.active) {
       res = await opUserService.deactivateUser(userId, actorUser, currentDeviceId);
@@ -188,8 +199,20 @@ export const UsersSection: React.FC = () => {
       if (currentOperator?.id === userId) {
         await reloadActiveOperator();
       }
+    } else if (res.error && res.error.includes('Límite')) {
+      setIsUpgradeModalOpen(true);
     }
     return res;
+  };
+
+  const handleCreateUserClick = async () => {
+    const entitlementService = repositoryFactory.getEntitlementService();
+    const decision = await entitlementService.checkLimit(currentBusinessId, 'users.active_operators');
+    if (!decision.allowed) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    setIsCreateOpen(true);
   };
 
   const formatLastAccess = (isoString?: string | null) => {
@@ -238,7 +261,7 @@ export const UsersSection: React.FC = () => {
             variant="brand"
             size="md"
             leftIcon={<UserPlus size={15} />}
-            onClick={() => setIsCreateOpen(true)}
+            onClick={handleCreateUserClick}
             className="w-full sm:w-auto"
           >
             Nuevo usuario
@@ -677,6 +700,14 @@ export const UsersSection: React.FC = () => {
         isOpen={Boolean(deactivatingUser)}
         onClose={() => setDeactivatingUser(null)}
         onConfirm={handleToggleActive}
+      />
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePromptModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        title="Límite de operadores alcanzado"
+        message="Has alcanzado el límite de 1 usuario incluido en SevenPOS Free. Actualiza a SevenPOS Pro para gestionar hasta 5 operadores con PIN independiente y control de roles."
       />
     </div>
   );

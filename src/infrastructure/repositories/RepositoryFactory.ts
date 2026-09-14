@@ -79,6 +79,12 @@ import { logger } from '../logging/Logger';
 
 import { OperationalUserService } from '../../application/user/OperationalUserService';
 import { pinVaultFactory } from '../security/PinVaultFactory';
+import { ISubscriptionRepository } from '../../domain/subscription/SubscriptionRepository';
+import { inMemorySubscriptionRepository } from './InMemorySubscriptionRepository';
+import { IUsageService } from '../../application/subscription/IUsageService';
+import { UsageService } from '../../application/subscription/UsageService';
+import { IEntitlementService } from '../../application/subscription/IEntitlementService';
+import { EntitlementService } from '../../application/subscription/EntitlementService';
 
 export class RepositoryFactory {
   private businessRepo: BusinessRepository | null = null;
@@ -108,6 +114,9 @@ export class RepositoryFactory {
   private auditRepo: AuditRepository | null = null;
   private auditQueryRepo: AuditQueryRepository | null = null;
   private auditService: AuditService | null = null;
+  private subscriptionRepo: ISubscriptionRepository | null = null;
+  private usageService: IUsageService | null = null;
+  private entitlementService: IEntitlementService | null = null;
   private settingsService: SettingsService | null = null;
 
   getOperationalUserService(): OperationalUserService {
@@ -585,6 +594,33 @@ export class RepositoryFactory {
     const queryRepo = this.getAuditQueryRepository();
     this.auditService = new AuditService(repo, queryRepo);
     return this.auditService;
+  }
+
+  getSubscriptionRepository(): ISubscriptionRepository {
+    if (this.subscriptionRepo) {
+      return this.subscriptionRepo;
+    }
+    this.subscriptionRepo = inMemorySubscriptionRepository;
+    return this.subscriptionRepo;
+  }
+
+  getUsageService(): IUsageService {
+    if (this.usageService) {
+      return this.usageService;
+    }
+    const subRepo = this.getSubscriptionRepository();
+    this.usageService = new UsageService(subRepo);
+    return this.usageService;
+  }
+
+  getEntitlementService(): IEntitlementService {
+    if (this.entitlementService) {
+      return this.entitlementService;
+    }
+    const subRepo = this.getSubscriptionRepository();
+    const usageSvc = this.getUsageService();
+    this.entitlementService = new EntitlementService(subRepo, usageSvc);
+    return this.entitlementService;
   }
 }
 

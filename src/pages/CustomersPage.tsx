@@ -7,6 +7,7 @@ import { DeactivateCustomer, ActivateCustomer } from '../application/customers/U
 import { CustomerKpiCards } from '../features/customers/components/CustomerKpiCards';
 import { CustomerModal } from '../features/customers/components/CustomerModal';
 import { ExportCustomersModal } from '../features/customers/components/ExportCustomersModal';
+import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
 import { PageContainer } from '../components/shell/PageContainer';
 import { PageHeader } from '../components/shell/PageHeader';
 import { Button } from '../components/ui/Button';
@@ -58,6 +59,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -121,6 +123,17 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
     }
   };
 
+  const handleNewCustomerClick = async () => {
+    const entitlementService = repositoryFactory.getEntitlementService();
+    const decision = await entitlementService.checkLimit(businessId, 'customers.active');
+    if (!decision.allowed) {
+      setIsUpgradeModalOpen(true);
+      return;
+    }
+    setCustomerToEdit(null);
+    setIsModalOpen(true);
+  };
+
   return (
     <PageContainer>
       <PageHeader
@@ -142,10 +155,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
               <Button
                 variant="primary"
                 leftIcon={<Plus size={16} />}
-                onClick={() => {
-                  setCustomerToEdit(null);
-                  setIsModalOpen(true);
-                }}
+                onClick={handleNewCustomerClick}
                 className="text-xs sm:text-sm"
               >
                 Nuevo cliente
@@ -439,6 +449,14 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
         onClose={() => setIsExportModalOpen(false)}
         customers={filteredCustomers}
         onSuccessToast={showToast}
+      />
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePromptModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        title="Límite de clientes alcanzado"
+        message="Has alcanzado los 50 clientes registrados incluidos en SevenPOS Free. Actualiza a SevenPOS Pro para gestionar clientes ilimitados."
       />
 
       {/* Toast feedback */}

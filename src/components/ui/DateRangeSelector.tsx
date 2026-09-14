@@ -8,11 +8,17 @@ import { Button } from './Button';
 export interface DateRangeOption {
   value: string;
   label: string;
+  locked?: boolean;
+  badge?: string;
+  lockReason?: string;
 }
 
 export interface DateRangeSelectorPreset {
   key: DateRangePreset;
   label: string;
+  locked?: boolean;
+  badge?: string;
+  lockReason?: string;
 }
 
 export interface DateRangeSelectorProps {
@@ -25,6 +31,9 @@ export interface DateRangeSelectorProps {
   currentRange?: DateRange;
   onRangeChange?: (range: DateRange) => void;
   presets?: DateRangeSelectorPreset[];
+
+  // Entitlement / Locked option handling (Purely presentational)
+  onLockedOptionSelect?: (option: DateRangeOption | DateRangeSelectorPreset) => void;
 
   // Styling & Accessibility
   className?: string;
@@ -50,6 +59,7 @@ export const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
   currentRange,
   onRangeChange,
   presets = DEFAULT_ANALYTICS_PRESETS,
+  onLockedOptionSelect,
   className = '',
   buttonClassName = '',
   ariaLabel,
@@ -108,20 +118,42 @@ export const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
       return found ? found.label : value;
     }
     if (currentRange) {
-      return currentRange.label;
+      if (currentRange.label) return currentRange.label;
+      if (currentRange.preset && currentRange.preset !== 'CUSTOM') {
+        const matchingPreset = presets?.find((p) => p.key === currentRange.preset);
+        if (matchingPreset) return matchingPreset.label;
+      }
+      if (currentRange.startDate && currentRange.endDate) {
+        return `${currentRange.startDate} — ${currentRange.endDate}`;
+      }
+      return 'Seleccionar fechas';
     }
     return 'Seleccionar fechas';
-  }, [options, value, currentRange]);
+  }, [options, value, currentRange, presets]);
 
-  const handleSelectOption = (optValue: string) => {
+  const handleSelectOption = (opt: DateRangeOption) => {
+    if (opt.locked) {
+      if (onLockedOptionSelect) {
+        onLockedOptionSelect(opt);
+      }
+      setIsOpen(false);
+      return;
+    }
     if (onChange) {
-      onChange(optValue);
+      onChange(opt.value);
     }
     setIsOpen(false);
   };
 
-  const handleSelectPreset = (presetKey: DateRangePreset) => {
-    if (presetKey === 'CUSTOM') {
+  const handleSelectPreset = (preset: DateRangeSelectorPreset) => {
+    if (preset.locked) {
+      if (onLockedOptionSelect) {
+        onLockedOptionSelect(preset);
+      }
+      setIsOpen(false);
+      return;
+    }
+    if (preset.key === 'CUSTOM') {
       setCustomStart(currentRange?.startDate || '');
       setCustomEnd(currentRange?.endDate || '');
       setIsOpen(false);
@@ -130,7 +162,7 @@ export const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
     }
 
     if (onRangeChange) {
-      const newRange = resolveDateRange(presetKey);
+      const newRange = resolveDateRange(preset.key);
       onRangeChange(newRange);
     }
     setIsOpen(false);
@@ -186,14 +218,21 @@ export const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
                   key={opt.value}
                   type="button"
                   data-testid={`daterange-option-${opt.value}`}
-                  onClick={() => handleSelectOption(opt.value)}
+                  onClick={() => handleSelectOption(opt)}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-colors cursor-pointer text-left ${
                     isSelected
                       ? 'bg-brand-primary/10 text-brand-primary font-bold'
                       : 'text-text-primary hover:bg-surface-secondary'
                   }`}
                 >
-                  <span>{opt.label}</span>
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="truncate">{opt.label}</span>
+                    {opt.badge && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-brand-primary/10 text-brand-primary border border-brand-primary/20 shrink-0 uppercase">
+                        {opt.badge}
+                      </span>
+                    )}
+                  </div>
                   {isSelected && <Check size={16} className="text-brand-primary shrink-0" />}
                 </button>
               );
@@ -208,14 +247,21 @@ export const DateRangeSelector: React.FC<DateRangeSelectorProps> = ({
                   key={p.key}
                   type="button"
                   data-testid={`daterange-preset-${p.key}`}
-                  onClick={() => handleSelectPreset(p.key)}
+                  onClick={() => handleSelectPreset(p)}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-colors cursor-pointer text-left ${
                     isSelected
                       ? 'bg-brand-primary/10 text-brand-primary font-bold'
                       : 'text-text-primary hover:bg-surface-secondary'
                   }`}
                 >
-                  <span>{p.label}</span>
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="truncate">{p.label}</span>
+                    {p.badge && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-md bg-brand-primary/10 text-brand-primary border border-brand-primary/20 shrink-0 uppercase">
+                        {p.badge}
+                      </span>
+                    )}
+                  </div>
                   {isSelected && <Check size={16} className="text-brand-primary shrink-0" />}
                 </button>
               );

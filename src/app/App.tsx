@@ -48,6 +48,7 @@ import { ReportsPage } from '../pages/ReportsPage';
 import { AuditPage } from '../pages/AuditPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { HelpPage } from '../pages/HelpPage';
+import { SubscriptionPage } from '../pages/SubscriptionPage';
 import { isEditableTarget } from '../utils/keyboard';
 
 // Navigation titles lookup
@@ -871,6 +872,10 @@ const AppRoot: React.FC = () => {
           onNavigateToSettings={() => handleNavigateNav('settings')}
         />
       );
+    }
+
+    if (activeNavId === 'subscription') {
+      return <SubscriptionPage />;
     }
 
     return (

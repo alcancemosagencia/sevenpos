@@ -1,5 +1,7 @@
 import { Customer, CreateCustomerDto, DuplicateCustomerMatch } from '../../domain/customers/Customer';
 import { CustomerRepository } from '../../domain/customers/repositories/CustomerRepository';
+import { IEntitlementService } from '../subscription/IEntitlementService';
+import { repositoryFactory } from '../../infrastructure/repositories/RepositoryFactory';
 
 export interface CreateCustomerResult {
   customer: Customer;
@@ -7,13 +9,26 @@ export interface CreateCustomerResult {
 }
 
 export class CreateCustomer {
-  constructor(private customerRepo: CustomerRepository) {}
+  private entitlementService: IEntitlementService;
+
+  constructor(
+    private customerRepo: CustomerRepository,
+    entitlementService?: IEntitlementService
+  ) {
+    this.entitlementService = entitlementService || repositoryFactory.getEntitlementService();
+  }
 
   async execute(
     businessId: string,
     dto: CreateCustomerDto,
     allowDuplicates: boolean = false
   ): Promise<CreateCustomerResult> {
+    // 0. Authoritative entitlement limit check
+    const limitDecision = await this.entitlementService.checkLimit(businessId, 'customers.active');
+    if (!limitDecision.allowed) {
+      throw new Error(limitDecision.message || 'Límite de clientes alcanzado en tu plan actual.');
+    }
+
     if (!dto.name || !dto.name.trim()) {
       throw new Error('El nombre del cliente es obligatorio.');
     }

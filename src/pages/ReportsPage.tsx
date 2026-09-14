@@ -7,9 +7,11 @@ import { AnalyticsKpiCard } from '../components/analytics/AnalyticsKpiCard';
 import { SimpleBarChart } from '../components/analytics/SimpleBarChart';
 import { SimpleAreaChart } from '../components/analytics/SimpleAreaChart';
 import { DistributionBar } from '../components/analytics/DistributionBar';
-import { DateRangeSelector } from '../components/ui/DateRangeSelector';
+import { DateRangeSelector, DateRangeSelectorPreset } from '../components/ui/DateRangeSelector';
 import { ExportCsvModal } from '../components/analytics/ExportCsvModal';
 import { ReportsTabs, ReportTabKey } from '../components/analytics/ReportsTabs';
+import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
+import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
 import {
   TrendingUp,
   DollarSign,
@@ -34,8 +36,13 @@ import { Card } from '../components/ui/Card';
 export const ReportsPage: React.FC = () => {
   const businessId = 'primary-business';
 
-  // Date Range state (default: THIS_MONTH)
-  const [dateRange, setDateRange] = useState<DateRange>(() => resolveDateRange('THIS_MONTH'));
+  // Subscription state
+  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'PRO'>('FREE');
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState<string | undefined>(undefined);
+
+  // Date Range state (default: LAST_7_DAYS for Free plan compliance)
+  const [dateRange, setDateRange] = useState<DateRange>(() => resolveDateRange('LAST_7_DAYS'));
   const [activeTab, setActiveTab] = useState<ReportTabKey>('resumen');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,6 +70,10 @@ export const ReportsPage: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      const subRepo = repositoryFactory.getSubscriptionRepository();
+      const sub = await subRepo.getSubscription(businessId);
+      setCurrentPlan(sub.plan);
+
       const [sum, sls, inv, fin, cust] = await Promise.all([
         operationalAnalyticsService.getExecutiveSummary(businessId, dateRange),
         operationalAnalyticsService.getSalesAnalytics(businessId, dateRange),
@@ -114,6 +125,41 @@ export const ReportsPage: React.FC = () => {
     };
   }, [businessId, dateRange]);
 
+  const reportPresets: DateRangeSelectorPreset[] = [
+    { key: 'TODAY', label: 'Hoy' },
+    { key: 'YESTERDAY', label: 'Ayer' },
+    { key: 'LAST_7_DAYS', label: 'Últimos 7 días' },
+    {
+      key: 'LAST_30_DAYS',
+      label: 'Últimos 30 días',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'THIS_MONTH',
+      label: 'Este mes',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'LAST_MONTH',
+      label: 'Mes anterior',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+    {
+      key: 'CUSTOM',
+      label: 'Personalizado',
+      locked: currentPlan === 'FREE',
+      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
+    },
+  ];
+
+  const handleLockedPresetSelect = () => {
+    setUpgradeModalMessage('El Plan Pro desbloquea el histórico completo de reportes comerciales e inteligencia.');
+    setIsUpgradeModalOpen(true);
+  };
+
   return (
     <PageContainer>
       {/* Top Header & Actions */}
@@ -131,6 +177,8 @@ export const ReportsPage: React.FC = () => {
           <DateRangeSelector
             currentRange={dateRange}
             onRangeChange={(newRange) => setDateRange(newRange)}
+            presets={reportPresets}
+            onLockedOptionSelect={handleLockedPresetSelect}
           />
 
           <button
@@ -934,6 +982,14 @@ export const ReportsPage: React.FC = () => {
         businessId={businessId}
         currentRange={dateRange}
         onSuccessToast={showToast}
+      />
+
+      {/* Upgrade Prompt Modal */}
+      <UpgradePromptModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        title="Histórico extendido en Plan Pro"
+        message={upgradeModalMessage || 'El Plan Pro desbloquea el histórico completo de reportes e inteligencia sin límites.'}
       />
 
       {/* Toast notification */}
