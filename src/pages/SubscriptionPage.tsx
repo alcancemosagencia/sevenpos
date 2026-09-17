@@ -46,7 +46,7 @@ function formatCLP(amount: number): string {
 }
 
 export const SubscriptionPage: React.FC = () => {
-  const { businessId, reauthenticateOwnerForBilling } = useAuth();
+  const { businessId, activeBusinessName, reauthenticateOwnerForBilling } = useAuth();
   const currentBusinessId = businessId || 'primary-business';
   const { country } = useCountry();
   const billingCapability = getBillingCapability(country?.countryCode);
@@ -428,7 +428,7 @@ export const SubscriptionPage: React.FC = () => {
                     Cancelar renovación
                   </Button>
                 ) : (
-                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-surface-secondary text-text-secondary border border-border-default">
                     Renovación cancelada
                   </span>
                 )}
@@ -554,7 +554,7 @@ export const SubscriptionPage: React.FC = () => {
               <Card className="p-5 sm:p-6 bg-surface border border-border-default rounded-3xl shadow-lg relative flex flex-col justify-between w-full">
                 {pricePreview?.isFounders && (
                   <div className="absolute -top-3 right-4 sm:right-6">
-                    <span className="px-3 py-1 text-[10px] sm:text-[11px] font-bold rounded-full bg-amber-500 text-white shadow-sm uppercase tracking-wider whitespace-nowrap">
+                    <span className="px-3 py-1 text-[10px] sm:text-[11px] font-bold rounded-full bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 border border-neutral-700/30 dark:border-neutral-300/30 shadow-xs uppercase tracking-wider whitespace-nowrap">
                       Precio Fundadores
                     </span>
                   </div>
@@ -571,19 +571,34 @@ export const SubscriptionPage: React.FC = () => {
                   {/* PRICE DISPLAY */}
                   <div className="space-y-1 min-h-[76px] flex flex-col justify-center mb-4">
                     {pricePreviewError ? (
-                      <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 space-y-2">
+                      <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 space-y-2.5">
                         <div className="flex items-center gap-2 font-bold">
                           <AlertCircle size={15} className="shrink-0" />
                           <span>{pricePreviewError}</span>
                         </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={fetchPricePreview}
-                          className="text-xs h-7 px-2.5"
-                        >
-                          Reintentar
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={fetchPricePreview}
+                            className="text-xs h-8 px-3"
+                          >
+                            Reintentar
+                          </Button>
+                          <a
+                            href={buildSalesWhatsAppUrl({
+                              businessName: activeBusinessName,
+                              countryName: country.countryName,
+                              interval: selectedInterval,
+                            })}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface border border-border-subtle text-xs font-semibold text-text-primary hover:bg-surface-secondary transition-colors"
+                          >
+                            <MessageCircle size={13} className="text-emerald-500" />
+                            <span>Hablar con ventas</span>
+                          </a>
+                        </div>
                       </div>
                     ) : isPricePreviewLoading ? (
                       <div className="space-y-2 animate-pulse">
@@ -601,7 +616,7 @@ export const SubscriptionPage: React.FC = () => {
                               + IVA / {selectedInterval === 'MONTHLY' ? 'mes' : 'año'}
                             </span>
                           </div>
-                          <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                          <p className="text-xs text-text-secondary font-medium">
                             Precio Fundadores · durante los primeros {pricePreview.durationMonths || 12} meses
                           </p>
                           <p className="text-xs text-text-tertiary">
@@ -619,7 +634,7 @@ export const SubscriptionPage: React.FC = () => {
                             </span>
                           </div>
                           {pricePreview.discountNetAmount > 0 ? (
-                            <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                            <p className="text-xs text-text-secondary font-medium">
                               Descuento aplicado · Renovación: {formatCLP(pricePreview.renewalNetAmount)} + IVA
                             </p>
                           ) : (
@@ -641,7 +656,7 @@ export const SubscriptionPage: React.FC = () => {
                       'Respaldos automáticos en la nube',
                     ].map((feat, i) => (
                       <div key={i} className="flex items-start gap-2.5 text-xs text-text-primary font-medium">
-                        <div className="w-4 h-4 rounded-full bg-brand-primary/15 text-brand-primary flex items-center justify-center shrink-0 mt-0.5">
+                        <div className="w-4 h-4 rounded-full bg-surface-secondary text-text-primary flex items-center justify-center shrink-0 mt-0.5 border border-border-subtle">
                           <Check size={11} strokeWidth={3} />
                         </div>
                         <span className="leading-snug">{feat}</span>
@@ -682,13 +697,13 @@ export const SubscriptionPage: React.FC = () => {
                     {couponFeedback && (
                       <div className={`mt-2 p-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 ${
                         couponFeedback.reason === 'PUBLIC_PROMOTION_ALREADY_APPLIED'
-                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
+                          ? 'bg-surface-secondary text-text-secondary border border-border-subtle'
                           : couponFeedback.valid
                           ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                           : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
                       }`}>
                         {couponFeedback.reason === 'PUBLIC_PROMOTION_ALREADY_APPLIED' ? (
-                          <CheckCircle2 size={14} className="text-amber-500 shrink-0" />
+                          <Tag size={14} className="text-text-tertiary shrink-0" />
                         ) : couponFeedback.valid ? (
                           <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
                         ) : (
@@ -722,6 +737,7 @@ export const SubscriptionPage: React.FC = () => {
 
                       <a
                         href={buildSalesWhatsAppUrl({
+                          businessName: activeBusinessName,
                           countryName: country.countryName,
                           interval: selectedInterval,
                         })}
@@ -741,7 +757,7 @@ export const SubscriptionPage: React.FC = () => {
                     <>
                       <div className="p-3.5 rounded-2xl bg-surface-secondary/70 border border-border-subtle text-xs text-text-secondary space-y-2 text-center">
                         <p className="font-semibold text-text-primary">
-                          Activación asistida para {country.countryName}
+                          {`Activación asistida para ${country.countryName}`}
                         </p>
                         <p className="text-[11px] text-text-tertiary leading-relaxed">
                           Te ayudaremos con la activación de SevenPOS Pro y el método de pago disponible para tu país.
@@ -750,6 +766,7 @@ export const SubscriptionPage: React.FC = () => {
 
                       <a
                         href={buildSalesWhatsAppUrl({
+                          businessName: activeBusinessName,
                           countryName: country.countryName,
                           interval: selectedInterval,
                         })}
@@ -797,7 +814,7 @@ export const SubscriptionPage: React.FC = () => {
                       <span>{formatCLP(pricePreview.baseNetAmount)}</span>
                     </div>
                     {pricePreview.discountNetAmount > 0 && (
-                      <div className="flex justify-between text-amber-600 dark:text-amber-400 font-semibold">
+                      <div className="flex justify-between text-text-primary font-semibold">
                         <span>
                           {pricePreview.isFounders
                             ? 'Precio Fundadores'
@@ -823,22 +840,37 @@ export const SubscriptionPage: React.FC = () => {
                   </div>
 
                   {pricePreview.isFounders && (
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 space-y-1">
-                      <p className="font-bold flex items-center gap-1.5"><Calendar size={12} /> Renovación automática</p>
+                    <div className="p-3 rounded-xl bg-surface-secondary border border-border-subtle text-[11px] text-text-secondary space-y-1">
+                      <p className="font-bold flex items-center gap-1.5 text-text-primary"><Calendar size={12} /> Renovación automática</p>
                       <p>Meses 1–{pricePreview.durationMonths || 12}: {formatCLP(pricePreview.finalNetAmount)} + IVA</p>
                       <p>Mes 13 en adelante: {formatCLP(pricePreview.renewalNetAmount)} + IVA</p>
                     </div>
                   )}
 
-                  <div className="p-3 rounded-xl bg-surface-secondary border border-border-subtle text-[11px] text-text-tertiary">
+                  <div className="p-3 rounded-xl bg-surface-secondary border border-border-subtle text-[11px] text-text-secondary">
                     <p>Al continuar serás redirigido a Mercado Pago para autorizar el cobro recurrente.</p>
-                    <p className="text-emerald-600 dark:text-emerald-400 font-semibold mt-1">Conexión cifrada y segura con Mercado Pago.</p>
+                    <p className="text-text-tertiary mt-1">Conexión cifrada y segura con Mercado Pago.</p>
                   </div>
 
                   {checkoutModalError && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
-                      <AlertCircle size={15} className="shrink-0 text-red-500" />
-                      <span>{checkoutModalError}</span>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
+                        <AlertCircle size={15} className="shrink-0 text-red-500" />
+                        <span>{checkoutModalError}</span>
+                      </div>
+                      <a
+                        href={buildSalesWhatsAppUrl({
+                          businessName: activeBusinessName,
+                          countryName: country.countryName,
+                          interval: selectedInterval,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 w-full h-10 px-4 rounded-xl bg-surface-secondary border border-border-subtle text-xs font-semibold text-text-primary hover:bg-surface-tertiary transition-colors"
+                      >
+                        <MessageCircle size={15} className="text-emerald-500" />
+                        <span>Hablar con ventas por WhatsApp</span>
+                      </a>
                     </div>
                   )}
 
@@ -889,8 +921,8 @@ export const SubscriptionPage: React.FC = () => {
             aria-modal="true"
           >
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 flex items-center justify-center shrink-0">
-                <AlertCircle size={20} className="text-amber-500" />
+              <div className="w-10 h-10 rounded-2xl bg-surface-secondary border border-border-subtle flex items-center justify-center shrink-0">
+                <AlertCircle size={20} className="text-text-primary" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-text-primary">¿Cancelar la renovación?</h3>

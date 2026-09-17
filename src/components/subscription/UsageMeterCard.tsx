@@ -42,7 +42,7 @@ export const UsageMeterCard: React.FC<UsageMeterCardProps> = ({ overview, onUpgr
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
         {/* Sales Volume (Unlimited Commercial Signal) */}
         <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-surface-secondary/60 border border-border-subtle">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+          <div className="w-10 h-10 rounded-xl bg-surface-secondary text-text-primary flex items-center justify-center shrink-0 border border-border-subtle">
             <TrendingUp size={20} />
           </div>
           <div className="min-w-0 flex-1">
@@ -112,9 +112,9 @@ function renderProgressMeter(metric: MetricUsage, icon: React.ReactNode) {
     badgeText = 'Límite alcanzado';
     badgeClass = 'text-status-danger bg-status-danger/10 border border-status-danger/20';
   } else if (metric.state === 'WARNING') {
-    barColor = 'bg-amber-500';
+    barColor = 'bg-text-secondary';
     badgeText = 'Por alcanzar límite';
-    badgeClass = 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20';
+    badgeClass = 'text-text-primary bg-surface-secondary border border-border-default';
   } else if (metric.state === 'INFORMATIVE') {
     barColor = 'bg-brand-primary';
     badgeText = 'En uso';

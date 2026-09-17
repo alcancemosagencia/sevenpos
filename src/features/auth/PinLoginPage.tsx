@@ -10,7 +10,14 @@ import horizontalLogo from '../../assets/branding/sevenpos-logo-horizontal.png';
 import welcomeIllustration from '../../assets/illustrations/onboarding-welcome.png';
 
 export const PinLoginPage: React.FC = () => {
-  const { state, unlockWithPin, activeOwnerName, activeBusinessName, startRegistration } = useAuth();
+  const {
+    state,
+    unlockWithPin,
+    activeOwnerName,
+    activeBusinessName,
+    goToRegister,
+    switchLocalAccount,
+  } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const [pin, setPin] = useState('');
@@ -187,18 +194,16 @@ export const PinLoginPage: React.FC = () => {
           <div className="flex flex-col items-center gap-1.5 pt-1">
             <button
               type="button"
-              onClick={startRegistration}
+              data-testid="pin-login-register-btn"
+              onClick={goToRegister}
               className="text-xs text-text-secondary hover:text-brand-primary transition-colors cursor-pointer select-none"
             >
               ¿No tienes cuenta? <span className="font-bold text-brand-primary underline">Regístrate</span>
             </button>
             <button
               type="button"
-              onClick={() => {
-                setPin('');
-                setHasError(false);
-                setErrorMessage('');
-              }}
+              data-testid="pin-login-switch-account-btn"
+              onClick={switchLocalAccount}
               className="text-[11px] text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer select-none"
             >
               ¿No es tu cuenta? <span className="underline">Cambiar sesión</span>

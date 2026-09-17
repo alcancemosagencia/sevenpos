@@ -247,7 +247,7 @@ Deno.serve(async (req: Request) => {
   if (rawBackUrl && typeof rawBackUrl === 'string') {
     try {
       const parsedUrl = new URL(rawBackUrl);
-      const allowedOrigins = ['https://sevenpos.pro', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+      const allowedOrigins = ['https://sevenpos.pro', 'https://www.sevenpos.pro', 'http://localhost:5173', 'http://127.0.0.1:5173'];
       if (allowedOrigins.includes(parsedUrl.origin) && parsedUrl.pathname.startsWith('/subscription/return')) {
         backUrl = rawBackUrl;
       }

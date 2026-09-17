@@ -115,8 +115,8 @@ export const SubscriptionReturnPage: React.FC<SubscriptionReturnPageProps> = ({
 
         {pageState === 'pending' && (
           <>
-            <div className="w-16 h-16 rounded-3xl bg-amber-500/10 flex items-center justify-center">
-              <AlertCircle size={30} className="text-amber-500" />
+            <div className="w-16 h-16 rounded-3xl bg-surface-secondary border border-border-default flex items-center justify-center">
+              <AlertCircle size={30} className="text-text-primary" />
             </div>
             <div className="space-y-2">
               <h2 className="text-xl font-bold text-text-primary">Pago en proceso</h2>

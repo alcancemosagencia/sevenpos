@@ -13,11 +13,21 @@ const CountryContext = createContext<CountryContextType | undefined>(undefined);
 
 export const COUNTRY_STORAGE_KEY = 'sevenpos-country-preference';
 
-export const CountryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const CountryProvider: React.FC<{ children: React.ReactNode; initialCountry?: SupportedCountryCode }> = ({
+  children,
+  initialCountry,
+}) => {
   const [countryCode, setCountryCodeState] = useState<SupportedCountryCode>(() => {
-    const saved = localStorage.getItem(COUNTRY_STORAGE_KEY) as SupportedCountryCode | null;
-    if (saved && COUNTRY_PROFILES[saved]) {
-      return saved;
+    if (initialCountry && COUNTRY_PROFILES[initialCountry]) {
+      return initialCountry;
+    }
+    try {
+      const saved = typeof localStorage !== 'undefined' ? (localStorage.getItem(COUNTRY_STORAGE_KEY) as SupportedCountryCode | null) : null;
+      if (saved && COUNTRY_PROFILES[saved]) {
+        return saved;
+      }
+    } catch {
+      // Ignore storage errors
     }
     return DEFAULT_COUNTRY;
   });
