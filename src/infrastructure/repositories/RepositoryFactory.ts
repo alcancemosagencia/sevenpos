@@ -81,6 +81,7 @@ import { OperationalUserService } from '../../application/user/OperationalUserSe
 import { pinVaultFactory } from '../security/PinVaultFactory';
 import { ISubscriptionRepository } from '../../domain/subscription/SubscriptionRepository';
 import { inMemorySubscriptionRepository } from './InMemorySubscriptionRepository';
+import { CloudSubscriptionRepository } from './CloudSubscriptionRepository';
 import { IUsageService } from '../../application/subscription/IUsageService';
 import { UsageService } from '../../application/subscription/UsageService';
 import { IEntitlementService } from '../../application/subscription/IEntitlementService';
@@ -600,7 +601,20 @@ export class RepositoryFactory {
     if (this.subscriptionRepo) {
       return this.subscriptionRepo;
     }
-    this.subscriptionRepo = inMemorySubscriptionRepository;
+    // Cloud-first: if Supabase is configured, use CloudSubscriptionRepository.
+    // It falls back to FREE safely if cloud is unreachable.
+    // InMemory is used only when Supabase env is absent (pure offline dev).
+    const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
+    const supabaseKey =
+      import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
+      import.meta.env?.VITE_SUPABASE_ANON_KEY; // VITE_SUPABASE_ANON_KEY: legacy backward-compatible fallback only
+    if (supabaseUrl && supabaseKey) {
+      logger.info('RepositoryFactory', 'Instantiating CloudSubscriptionRepository (cloud-first, FREE fallback)');
+      this.subscriptionRepo = new CloudSubscriptionRepository();
+    } else {
+      logger.info('RepositoryFactory', 'Instantiating InMemorySubscriptionRepository (no Supabase config)');
+      this.subscriptionRepo = inMemorySubscriptionRepository;
+    }
     return this.subscriptionRepo;
   }
 

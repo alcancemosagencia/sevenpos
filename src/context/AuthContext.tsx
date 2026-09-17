@@ -61,6 +61,7 @@ export interface AuthContextType {
 
   // Cloud Actions
   signInWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  reauthenticateOwnerForBilling: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signUpWithEmail: (params: SignUpParams & { businessName: string; countryCode: string }) => Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }>;
   setupCloudBusiness: (params: { businessName: string; countryCode: string }) => Promise<{ success: boolean; error?: string }>;
   checkEmailVerified: () => Promise<boolean>;
@@ -408,6 +409,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     } catch (err: unknown) {
       console.error('Error during signInWithEmail:', err);
       return { success: false, error: err instanceof Error ? err.message : 'Correo o contraseña incorrectos.' };
+    }
+  };
+
+  // Re-authenticate Cloud Owner specifically for Billing actions (does NOT reset local terminal session)
+  const reauthenticateOwnerForBilling = async (
+    email: string,
+    pass: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const user = await cloudService.signInWithPassword(email, pass);
+
+      if (!user.emailConfirmed) {
+        return { success: false, error: 'Por favor confirma tu correo electrónico antes de continuar.' };
+      }
+
+      // Query memberships to ensure user is active OWNER
+      const memberships = await cloudService.getMemberships();
+      const ownerMembership = memberships.find((m) => m.role === 'OWNER');
+
+      if (!ownerMembership) {
+        return {
+          success: false,
+          error: 'Esta acción solo puede realizarla el propietario del negocio.',
+        };
+      }
+
+      if (ownerMembership.status === 'INACTIVE') {
+        return {
+          success: false,
+          error: 'Tu membresía de propietario se encuentra inactiva. Contacta soporte.',
+        };
+      }
+
+      if (ownerMembership.status === 'REVOKED') {
+        return {
+          success: false,
+          error: 'Tu acceso como propietario ha sido revocado.',
+        };
+      }
+
+      // Check business match if local business is enrolled/linked
+      const currentEnrollment = DeviceEnrollmentStorage.getEnrollment();
+      const currentLink = CloudBusinessLinkStorage.getLink();
+      const expectedCloudBizId = currentEnrollment?.cloudBusinessId || currentLink?.cloudBusinessId;
+      if (expectedCloudBizId && ownerMembership.businessId !== expectedCloudBizId) {
+        return {
+          success: false,
+          error: 'La cuenta ingresada pertenece a otro negocio.',
+        };
+      }
+
+      // Populate cloud identity state without altering local terminal authMachineState
+      setCloudUser(user);
+      setCloudMembership(ownerMembership);
+
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error during reauthenticateOwnerForBilling:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'No pudimos verificar la cuenta del propietario.' };
     }
   };
 
@@ -1144,6 +1205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         activeCountryCode,
         businessId: resolvedBusinessId,
         signInWithEmail,
+        reauthenticateOwnerForBilling,
         signUpWithEmail,
         setupCloudBusiness,
         checkEmailVerified,

@@ -82,11 +82,14 @@ describe('Subscription UI - Components and Page', () => {
     );
 
     expect(html).toContain('Suscripción');
-    expect(html).toContain('SevenPOS Free');
+    expect(html).toContain('Plan Free');
     expect(html).toContain('SevenPOS Pro');
-    expect(html).toContain('SevenPOS empieza a trabajar por ti');
+    expect(html).toContain('Elige el plan ideal para tu negocio');
     expect(html).toContain('Comparativa de Planes');
     expect(html).toContain('Próximamente en SevenPOS Pro');
+    expect(html).toContain('Ventas ilimitadas');
+    expect(html).toContain('Hasta 100 productos activos');
+    expect(html).toContain('Continuar con Mercado Pago');
   });
 
   it('renders UsageMeterCard with all 3 resource meters, sales volume, history, and device display', () => {

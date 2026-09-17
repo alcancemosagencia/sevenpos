@@ -49,6 +49,10 @@ import { AuditPage } from '../pages/AuditPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { HelpPage } from '../pages/HelpPage';
 import { SubscriptionPage } from '../pages/SubscriptionPage';
+import { SubscriptionReturnPage } from '../pages/SubscriptionReturnPage';
+import { PlanCode } from '../domain/subscription/Plan';
+import { effectivePlanCode } from '../domain/subscription/Subscription';
+import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
 import { isEditableTarget } from '../utils/keyboard';
 
 // Navigation titles lookup
@@ -71,6 +75,7 @@ const NAV_TITLES: Record<string, string> = {
   settings: 'Configuración',
   help: 'Centro de Ayuda',
   subscription: 'Planes y Suscripción',
+  'subscription-return': 'Activación de Suscripción',
   logout: 'Cerrar Sesión',
 };
 
@@ -123,6 +128,8 @@ function getNavIdFromPath(path?: string): string {
       return 'help';
     case '/subscription':
       return 'subscription';
+    case '/subscription/return':
+      return 'subscription-return';
     case '/dashboard':
     default:
       if (clean.startsWith('/customers/')) {
@@ -210,9 +217,13 @@ const AppRoot: React.FC = () => {
     signOutCloudAccount,
     sessionStatus,
     state,
+    businessId,
   } = useAuth();
 
   const { currentOperator, activeRole, can, openFastSwitchModal } = useOperationalSession();
+
+  const [subscriptionPlan, setSubscriptionPlan] = useState<PlanCode>('FREE');
+  const activeBusinessId = businessId || 'primary-business';
 
   const [activeNavId, setActiveNavId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -223,6 +234,27 @@ const AppRoot: React.FC = () => {
     }
     return 'dashboard';
   });
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadSubscription = async () => {
+      try {
+        const subRepo = repositoryFactory.getSubscriptionRepository();
+        const sub = await subRepo.getSubscription(activeBusinessId);
+        if (isMounted) {
+          setSubscriptionPlan(effectivePlanCode(sub));
+        }
+      } catch {
+        if (isMounted) {
+          setSubscriptionPlan('FREE');
+        }
+      }
+    };
+    loadSubscription();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeBusinessId, activeNavId]);
 
   const [productSubView, setProductSubView] = useState<'list' | 'new' | 'edit' | 'detail'>('list');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
@@ -331,7 +363,7 @@ const AppRoot: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowDiagnostics(true)}
-          className="fixed bottom-20 right-3 sm:bottom-3 sm:right-3 z-50 p-2 rounded-full bg-surface-secondary/80 backdrop-blur-xs border border-border-default shadow-md hover:border-brand-primary text-text-tertiary hover:text-brand-primary transition-colors cursor-pointer text-xs flex items-center gap-1"
+          className="fixed bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 p-1.5 sm:p-2 rounded-full bg-surface-secondary/80 backdrop-blur-xs border border-border-default shadow-md hover:border-brand-primary text-text-tertiary hover:text-brand-primary transition-colors cursor-pointer text-xs flex items-center gap-1 opacity-70 hover:opacity-100"
           title="Abrir Diagnósticos Técnicos (AG-03 / AG-04 Core)"
         >
           <Activity size={14} />
@@ -878,6 +910,15 @@ const AppRoot: React.FC = () => {
       return <SubscriptionPage />;
     }
 
+    if (activeNavId === 'subscription-return') {
+      return (
+        <SubscriptionReturnPage
+          onNavigateToSubscription={() => handleNavigateNav('subscription')}
+          onNavigateToDashboard={() => handleNavigateNav('dashboard')}
+        />
+      );
+    }
+
     return (
       <PlaceholderPage
         title={currentPageTitle}
@@ -903,6 +944,8 @@ const AppRoot: React.FC = () => {
         userName={effectiveUserName}
         userRole={effectiveUserRole}
         canManageSettings={can('settings.manage')}
+        planCode={subscriptionPlan}
+        onNavigateToSubscription={() => handleNavigateNav('subscription')}
       >
         {!isCloudLinked && <LinkAccountBanner onOpenLinkModal={openLinkingModal} />}
         {renderContent()}

@@ -1,6 +1,10 @@
 import { PlanCode } from './Plan';
 
-export type SubscriptionStatus = 'ACTIVE';
+/**
+ * SevenPOS canonical subscription statuses.
+ * CANCELED is NOT used — cancel intent is expressed via cancel_at_period_end = true on ACTIVE.
+ */
+export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED';
 export type SubscriptionSource = 'LOCAL_FALLBACK' | 'CLOUD';
 
 export interface Subscription {
@@ -8,5 +12,21 @@ export interface Subscription {
   plan: PlanCode;
   status: SubscriptionStatus;
   source: SubscriptionSource;
+  /** ISO 8601 timestamp of last known update */
   updatedAt: string;
+  /** True if cancel has been requested; Pro remains until periodEnd */
+  cancelAtPeriodEnd?: boolean;
+  /** ISO 8601 end of current billing period (if known) */
+  periodEnd?: string | null;
+}
+
+/**
+ * Derives the effective entitlement plan from a subscription.
+ * ACTIVE or PAST_DUE (within grace) → PRO
+ * All others → FREE
+ */
+export function effectivePlanCode(sub: Subscription): PlanCode {
+  if (sub.plan === 'FREE') return 'FREE';
+  if (sub.status === 'ACTIVE' || sub.status === 'PAST_DUE') return 'PRO';
+  return 'FREE';
 }

@@ -14,6 +14,8 @@ export interface AppShellProps {
   onOpenSettings?: () => void;
   onLogout?: () => void;
   onSwitchUser?: () => void;
+  planCode?: 'FREE' | 'PRO';
+  onNavigateToSubscription?: () => void;
 }
 
 export const AppShell: React.FC<AppShellProps> = ({
@@ -28,6 +30,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   onOpenSettings,
   onLogout,
   onSwitchUser,
+  planCode = 'FREE',
+  onNavigateToSubscription,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -80,6 +84,9 @@ export const AppShell: React.FC<AppShellProps> = ({
           onOpenSettings={onOpenSettings || (() => onNavigate('settings'))}
           searchValue={searchValue}
           onSearch={setSearchValue}
+          activeNavId={activeNavId}
+          planCode={planCode}
+          onNavigateToSubscription={onNavigateToSubscription || (() => onNavigate('subscription'))}
         />
 
         <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">

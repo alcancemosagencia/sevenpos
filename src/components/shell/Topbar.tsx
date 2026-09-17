@@ -28,6 +28,9 @@ export interface TopbarProps {
   userRole?: string;
   onSwitchUser?: () => void;
   className?: string;
+  activeNavId?: string;
+  planCode?: 'FREE' | 'PRO';
+  onNavigateToSubscription?: () => void;
 }
 
 export const Topbar: React.FC<TopbarProps> = ({
@@ -43,8 +46,19 @@ export const Topbar: React.FC<TopbarProps> = ({
   userRole,
   onSwitchUser,
   className = '',
+  activeNavId,
+  planCode = 'FREE',
+  onNavigateToSubscription,
 }) => {
   const { theme, toggleTheme } = useTheme();
+
+  const isSubscriptionActive = activeNavId === 'subscription';
+  const isPro = planCode === 'PRO';
+
+  const handleSubscriptionClick = () => {
+    if (isSubscriptionActive) return;
+    onNavigateToSubscription?.();
+  };
 
   return (
     <header
@@ -87,16 +101,32 @@ export const Topbar: React.FC<TopbarProps> = ({
 
       {/* Right: CTA Pro, Search, Theme, Settings, Notifications */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        {/* Actualizar a Pro CTA (Brand button - Blue solid) */}
-        <Button
-          variant="brand"
-          size="sm"
-          className="hidden sm:inline-flex rounded-full text-xs font-semibold px-3 py-1.5 shadow-xs"
-          leftIcon={<Sparkles size={13} />}
-          onClick={() => {}}
-        >
-          Actualizar a Pro
-        </Button>
+        {/* Subscription CTA: "Actualizar a Pro" (FREE) or "Plan Pro" (PRO) */}
+        {isPro ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="hidden sm:inline-flex rounded-full text-xs font-semibold px-3 py-1.5 border border-brand-primary/30 text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 shadow-xs transition-colors cursor-pointer"
+            leftIcon={<Sparkles size={13} className="text-brand-primary" />}
+            onClick={handleSubscriptionClick}
+            aria-label={isSubscriptionActive ? 'Plan Pro (Activo)' : 'Gestionar Plan Pro'}
+            aria-current={isSubscriptionActive ? 'page' : undefined}
+          >
+            Plan Pro
+          </Button>
+        ) : (
+          <Button
+            variant="brand"
+            size="sm"
+            className="hidden sm:inline-flex rounded-full text-xs font-semibold px-3 py-1.5 shadow-xs transition-colors cursor-pointer"
+            leftIcon={<Sparkles size={13} />}
+            onClick={handleSubscriptionClick}
+            aria-label={isSubscriptionActive ? 'Suscripción (Actual)' : 'Actualizar a Pro'}
+            aria-current={isSubscriptionActive ? 'page' : undefined}
+          >
+            Actualizar a Pro
+          </Button>
+        )}
 
         {/* Global Search Input */}
         <div className="hidden md:block">

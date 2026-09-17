@@ -52,6 +52,7 @@ function createMockAuthContext(overrides?: Partial<AuthContextType>): AuthContex
     activeCountryCode: 'CL',
     businessId: 'biz-test-01',
     signInWithEmail: vi.fn(),
+    reauthenticateOwnerForBilling: vi.fn().mockResolvedValue({ success: true }),
     signUpWithEmail: vi.fn(),
     setupCloudBusiness: vi.fn(),
     checkEmailVerified: vi.fn(),
