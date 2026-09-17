@@ -256,6 +256,8 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  const frequency = billingInterval === 'MONTHLY' ? 1 : 12;
+
   const mpPayload = {
     auto_recurring: {
       frequency,
