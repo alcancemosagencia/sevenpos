@@ -652,6 +652,7 @@ const AppRoot: React.FC = () => {
             setSelectedProductId(detailId);
             setProductSubView('detail');
           }}
+          onNavigateToSubscription={() => handleNavigateNav('subscription')}
         />
       );
     }
@@ -827,6 +828,7 @@ const AppRoot: React.FC = () => {
             setSelectedCustomerId(id);
             setCustomerSubView('detail');
           }}
+          onNavigateToSubscription={() => handleNavigateNav('subscription')}
         />
       );
     }
@@ -850,7 +852,7 @@ const AppRoot: React.FC = () => {
           </div>
         );
       }
-      return <ReportsPage />;
+      return <ReportsPage onNavigateToSubscription={() => handleNavigateNav('subscription')} />;
     }
 
     if (activeNavId === 'audit') {
@@ -872,7 +874,7 @@ const AppRoot: React.FC = () => {
           </div>
         );
       }
-      return <AuditPage />;
+      return <AuditPage onNavigateToSubscription={() => handleNavigateNav('subscription')} />;
     }
 
     if (activeNavId === 'settings') {
@@ -894,7 +896,7 @@ const AppRoot: React.FC = () => {
           </div>
         );
       }
-      return <SettingsPage />;
+      return <SettingsPage onNavigateToSubscription={() => handleNavigateNav('subscription')} />;
     }
 
     if (activeNavId === 'help') {

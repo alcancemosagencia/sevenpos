@@ -140,6 +140,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     return cloudAuthServiceFactory.getService();
   }, [cloudServiceOverride]);
 
+  // Non-blocking background hydration of cloud session if available
+  const hydrateCloudSessionSilently = useCallback(async () => {
+    try {
+      const cloudService = getCloudService();
+      const user = await cloudService.getUser();
+      if (user && user.emailConfirmed) {
+        setCloudUser(user);
+        const memberships = await cloudService.getMemberships();
+        const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
+        if (ownerMembership) {
+          setCloudMembership(ownerMembership);
+        }
+      }
+    } catch {
+      // Non-blocking: network offline or token expired
+    }
+  }, [getCloudService]);
+
   // Main Boot Process
   const runBoot = useCallback(async () => {
     setBootStatus('INITIALIZING');
@@ -196,6 +214,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       const localLink = CloudBusinessLinkStorage.getLink();
       setDeviceEnrollment(localEnrollment);
       setCloudBusinessLink(localLink);
+      setResolvedBusinessId(result.business?.id || localEnrollment?.localBusinessId || localLink?.localBusinessId || null);
+
+      if (localEnrollment || localLink) {
+        hydrateCloudSessionSilently();
+      }
 
       // State Machine Resolution:
       if (localEnrollment) {
@@ -230,7 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         setBootError(msg);
       }
     }
-  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode]);
+  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode, hydrateCloudSessionSilently]);
 
   useEffect(() => {
     let isMounted = true;
@@ -288,6 +311,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         setCloudBusinessLink(localLink);
         setResolvedBusinessId(result.business?.id || localEnrollment?.localBusinessId || localLink?.localBusinessId || null);
 
+        if (localEnrollment || localLink) {
+          hydrateCloudSessionSilently();
+        }
+
         if (localEnrollment) {
           if (result.sessionStatus === 'unlocked') {
             setAuthMachineState('DEVICE_UNLOCKED');
@@ -324,7 +351,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     return () => {
       isMounted = false;
     };
-  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode]);
+  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode, hydrateCloudSessionSilently]);
 
   // Synchronize browser canonical URL anytime auth lifecycle state changes
   useEffect(() => {
@@ -1057,6 +1084,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       };
       setState(updated);
       onboardingRepository.save(updated);
+
+      if (deviceEnrollment || cloudBusinessLink) {
+        hydrateCloudSessionSilently();
+      }
 
       logAuditEventSafely({
         businessId: bizId,

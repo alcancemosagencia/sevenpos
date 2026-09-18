@@ -11,6 +11,7 @@ import { Check, Info, Save } from 'lucide-react';
 interface GeneralSectionProps {
   initialData: GeneralSettingsForm;
   ownerEmail?: string | null;
+  isCloudLinked?: boolean;
   onSave: (data: GeneralSettingsForm) => Promise<{ success: boolean; error?: string }>;
   onDirtyChange: (isDirty: boolean) => void;
 }
@@ -18,6 +19,7 @@ interface GeneralSectionProps {
 export const GeneralSection: React.FC<GeneralSectionProps> = ({
   initialData,
   ownerEmail,
+  isCloudLinked = false,
   onSave,
   onDirtyChange,
 }) => {
@@ -163,7 +165,7 @@ export const GeneralSection: React.FC<GeneralSectionProps> = ({
         >
           <div className="w-full md:w-80 flex items-center justify-between md:justify-end gap-2.5">
             <span className="text-sm font-medium text-text-primary truncate">
-              {ownerEmail ? ownerEmail : 'Cuenta no vinculada'}
+              {ownerEmail ? ownerEmail : isCloudLinked ? 'Cuenta vinculada' : 'Cuenta no vinculada'}
             </span>
             <span className="text-xs text-text-tertiary flex items-center gap-1 shrink-0">
               <Info size={13} />

@@ -33,7 +33,13 @@ import {
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 
-export const ReportsPage: React.FC = () => {
+export interface ReportsPageProps {
+  onNavigateToSubscription?: () => void;
+}
+
+export const ReportsPage: React.FC<ReportsPageProps> = ({
+  onNavigateToSubscription,
+}) => {
   const businessId = 'primary-business';
 
   // Subscription state
@@ -988,6 +994,7 @@ export const ReportsPage: React.FC = () => {
       <UpgradePromptModal
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
+        onNavigateToSubscription={onNavigateToSubscription}
         title="Histórico extendido en Plan Pro"
         message={upgradeModalMessage || 'El Plan Pro desbloquea el histórico completo de reportes e inteligencia sin límites.'}
       />

@@ -184,6 +184,17 @@ export class BillingApiClient {
   async cancelSubscription(): Promise<CancelSubscriptionResponse> {
     return this.invokeFunction<CancelSubscriptionResponse>('billing-cancel-subscription', {});
   }
+
+  /**
+   * Trigger canonical subscription reconciliation with provider.
+   * Safe and idempotent.
+   */
+  async reconcileSubscription(preapprovalId?: string): Promise<{ success: boolean; status?: string; planCode?: string }> {
+    return this.invokeFunction<{ success: boolean; status?: string; planCode?: string }>(
+      'billing-reconcile-subscriptions',
+      preapprovalId ? { preapproval_id: preapprovalId } : {}
+    );
+  }
 }
 
 export const billingApiClient = new BillingApiClient();

@@ -16,7 +16,13 @@ import { DateRange } from '../application/analytics/types';
 import { DateRangeSelectorPreset } from '../components/ui/DateRangeSelector';
 import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
 
-export const AuditPage: React.FC = () => {
+export interface AuditPageProps {
+  onNavigateToSubscription?: () => void;
+}
+
+export const AuditPage: React.FC<AuditPageProps> = ({
+  onNavigateToSubscription,
+}) => {
   const { businessId } = useAuth();
 
   // Subscription state
@@ -310,6 +316,7 @@ export const AuditPage: React.FC = () => {
       <UpgradePromptModal
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
+        onNavigateToSubscription={onNavigateToSubscription}
         title="Historial de auditoría en Plan Pro"
         message={upgradeModalMessage || 'El Plan Pro desbloquea el historial completo de eventos de auditoría y seguridad.'}
       />

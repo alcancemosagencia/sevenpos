@@ -32,11 +32,13 @@ import {
 interface CustomersPageProps {
   onNavigate: (route: string) => void;
   onSelectCustomerDetail?: (customerId: string) => void;
+  onNavigateToSubscription?: () => void;
 }
 
 export const CustomersPage: React.FC<CustomersPageProps> = ({
   onNavigate,
   onSelectCustomerDetail,
+  onNavigateToSubscription,
 }) => {
   const businessId = 'primary-business';
   const { country } = useCountry();
@@ -455,6 +457,7 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
       <UpgradePromptModal
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
+        onNavigateToSubscription={onNavigateToSubscription || (() => onNavigate('subscription'))}
         title="Límite de clientes alcanzado"
         message="Has alcanzado los 50 clientes registrados incluidos en SevenPOS Free. Actualiza a SevenPOS Pro para gestionar clientes ilimitados."
       />

@@ -36,6 +36,11 @@ export const SubscriptionReturnPage: React.FC<SubscriptionReturnPageProps> = ({
 
     async function checkCloudState(attempt: number) {
       try {
+        if (attempt === 0) {
+          // Trigger immediate server-side reconciliation in case webhook is pending
+          await billingApiClient.reconcileSubscription().catch(() => {});
+        }
+
         const status = await billingApiClient.getSubscriptionStatus();
         if (cancelled) return;
 

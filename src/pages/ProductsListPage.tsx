@@ -25,12 +25,14 @@ interface ProductsListPageProps {
   onNavigateToNewProduct: () => void;
   onNavigateToEditProduct: (id: string) => void;
   onNavigateToProductDetail: (id: string) => void;
+  onNavigateToSubscription?: () => void;
 }
 
 export const ProductsListPage: React.FC<ProductsListPageProps> = ({
   onNavigateToNewProduct,
   onNavigateToEditProduct,
   onNavigateToProductDetail,
+  onNavigateToSubscription,
 }) => {
   const { state } = useAuth();
   const businessId = 'primary-business';
@@ -387,6 +389,7 @@ export const ProductsListPage: React.FC<ProductsListPageProps> = ({
       <UpgradePromptModal
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
+        onNavigateToSubscription={onNavigateToSubscription}
         title="Límite de productos alcanzado"
         message="Has alcanzado los 100 productos activos incluidos en SevenPOS Free. Actualiza a SevenPOS Pro para registrar productos ilimitados."
       />

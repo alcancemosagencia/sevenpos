@@ -30,7 +30,13 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-export const UsersSection: React.FC = () => {
+export interface UsersSectionProps {
+  onNavigateToSubscription?: () => void;
+}
+
+export const UsersSection: React.FC<UsersSectionProps> = ({
+  onNavigateToSubscription,
+}) => {
   const { businessId, activeOwnerName, state, deviceEnrollment } = useAuth();
   const { currentOperator, reloadActiveOperator, can } = useOperationalSession();
   const currentBusinessId = businessId || 'primary-business';
@@ -706,6 +712,7 @@ export const UsersSection: React.FC = () => {
       <UpgradePromptModal
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
+        onNavigateToSubscription={onNavigateToSubscription}
         title="Límite de operadores alcanzado"
         message="Has alcanzado el límite de 1 usuario incluido en SevenPOS Free. Actualiza a SevenPOS Pro para gestionar hasta 5 operadores con PIN independiente y control de roles."
       />

@@ -28,11 +28,28 @@ describe('AG-13B: Owner Email Read-Only UI Contract', () => {
     expect(html).toContain('Solo lectura');
   });
 
-  it('renders fallback when owner email is unlinked', () => {
+  it('renders Cuenta vinculada when isCloudLinked is true but email is not available', () => {
     const html = renderToString(
       <GeneralSection
         initialData={dummyInitialData}
         ownerEmail={null}
+        isCloudLinked={true}
+        onSave={async () => ({ success: true })}
+        onDirtyChange={() => {}}
+      />
+    );
+
+    expect(html).toContain('Correo del propietario');
+    expect(html).toContain('Cuenta vinculada');
+    expect(html).not.toContain('Cuenta no vinculada');
+  });
+
+  it('renders fallback when owner email is unlinked and isCloudLinked is false', () => {
+    const html = renderToString(
+      <GeneralSection
+        initialData={dummyInitialData}
+        ownerEmail={null}
+        isCloudLinked={false}
         onSave={async () => ({ success: true })}
         onDirtyChange={() => {}}
       />

@@ -43,19 +43,33 @@ const SETTINGS_SECTIONS: NavSectionItem[] = [
   { id: 'appearance', label: 'Apariencia', icon: Palette },
 ];
 
-export const SettingsPage: React.FC = () => {
-  const { businessId, activeOwnerName, cloudUser, cloudMembership, state, deviceEnrollment } = useAuth();
+export interface SettingsPageProps {
+  onNavigateToSubscription?: () => void;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({
+  onNavigateToSubscription,
+}) => {
+  const { businessId, activeOwnerName, cloudUser, cloudMembership, state, deviceEnrollment, isCloudLinked } = useAuth();
   const currentBusinessId = businessId || 'primary-business';
   const currentUserId = cloudUser?.id || 'primary-user';
   const currentUserName = activeOwnerName || 'Administrador';
   const currentDeviceId = deviceEnrollment?.deviceId || 'local-device';
 
-  // Unequivocal Owner Email resolution
+  // Canonical Owner Email resolution hierarchy:
+  // 1. Active verified cloud OWNER session email
+  // 2. Active cloud user email
+  // 3. Enrolled device account email (from deviceEnrollment.accountEmail)
+  // 4. Local onboarding owner email (state.owner.email)
   const ownerEmail = (cloudMembership?.role === 'OWNER' && cloudUser?.email)
     ? cloudUser.email
-    : (cloudUser?.email && state?.owner?.email === cloudUser.email)
+    : (cloudUser?.email)
     ? cloudUser.email
-    : (state?.owner?.email || null);
+    : (deviceEnrollment?.accountEmail && deviceEnrollment.accountEmail.trim().length > 0)
+    ? deviceEnrollment.accountEmail
+    : (state?.owner?.email && state.owner.email.trim().length > 0)
+    ? state.owner.email
+    : null;
 
   const [activeSection, setActiveSection] = useState<SettingsSectionId>('general');
   const [pendingSection, setPendingSection] = useState<SettingsSectionId | null>(null);
@@ -313,6 +327,7 @@ export const SettingsPage: React.FC = () => {
                 <GeneralSection
                   initialData={generalData}
                   ownerEmail={ownerEmail}
+                  isCloudLinked={isCloudLinked}
                   onSave={handleSaveGeneral}
                   onDirtyChange={setIsCurrentDirty}
                 />
@@ -356,7 +371,7 @@ export const SettingsPage: React.FC = () => {
               )}
 
               {activeSection === 'users' && (
-                <UsersSection />
+                <UsersSection onNavigateToSubscription={onNavigateToSubscription} />
               )}
 
               {activeSection === 'device' && deviceData && (
