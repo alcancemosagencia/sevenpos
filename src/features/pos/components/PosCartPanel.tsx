@@ -129,6 +129,7 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
             <PosCartItem
               key={line.lineId}
               item={line}
+              currency={currency}
               onIncrement={() => incrementQuantity(line.lineId)}
               onDecrement={() => decrementQuantity(line.lineId)}
               onRemove={() => removeItem(line.lineId)}
