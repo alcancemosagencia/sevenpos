@@ -7,6 +7,8 @@ import {
   AlertCircle,
   UploadCloud,
   X,
+  Scale,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
@@ -55,6 +57,7 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
+  const [saleMode, setSaleMode] = useState<'UNIT' | 'WEIGHT'>('UNIT');
   const [baseUnit, setBaseUnit] = useState<BaseUnitCode>('UNIT');
   const [salePriceMinor, setSalePriceMinor] = useState<number | null>(null);
   const [costPriceMinor, setCostPriceMinor] = useState<number | null>(null);
@@ -102,6 +105,7 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
             setName(p.name);
             setDescription(p.description || '');
             setCategoryId(p.categoryId || '');
+            setSaleMode(p.saleMode || 'UNIT');
             setBaseUnit(p.baseUnit);
             setSalePriceMinor(p.salePrice);
             setCostPriceMinor(p.costPrice ?? null);
@@ -253,7 +257,8 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
           name: name.trim(),
           description: description.trim() || null,
           categoryId: categoryId || null,
-          baseUnit,
+          saleMode,
+          baseUnit: saleMode === 'WEIGHT' ? 'KG' : baseUnit,
           salePrice: salePriceMinor,
           costPrice: costPriceMinor,
           minimumStock: parsedMinStock,
@@ -276,7 +281,8 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
           name: name.trim(),
           description: description.trim() || null,
           categoryId: categoryId || null,
-          baseUnit,
+          saleMode,
+          baseUnit: saleMode === 'WEIGHT' ? 'KG' : baseUnit,
           salePrice: salePriceMinor,
           costPrice: costPriceMinor,
           minimumStock: parsedMinStock,
@@ -522,10 +528,65 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
             2. Venta y precios
           </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+          {/* Tipo de venta: Por Unidad vs Por Peso */}
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+              Tipo de venta <span className="text-red-400">*</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setSaleMode('UNIT');
+                  setIsDirty(true);
+                }}
+                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  saleMode === 'UNIT'
+                    ? 'bg-brand-primary/10 border-brand-primary text-text-primary shadow-xs'
+                    : 'bg-surface-secondary/50 border-border-default text-text-secondary hover:border-border-default/80 hover:bg-surface-secondary'
+                }`}
+              >
+                <div className={`p-2 rounded-lg shrink-0 ${saleMode === 'UNIT' ? 'bg-brand-primary text-white' : 'bg-surface text-text-tertiary'}`}>
+                  <Package size={18} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-text-primary">Por Unidad</div>
+                  <div className="text-[11px] text-text-tertiary mt-0.5">
+                    Producto vendido por unidades enteras o paquetes cerrados.
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSaleMode('WEIGHT');
+                  setBaseUnit('KG');
+                  setIsDirty(true);
+                }}
+                className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  saleMode === 'WEIGHT'
+                    ? 'bg-brand-primary/10 border-brand-primary text-text-primary shadow-xs'
+                    : 'bg-surface-secondary/50 border-border-default text-text-secondary hover:border-border-default/80 hover:bg-surface-secondary'
+                }`}
+              >
+                <div className={`p-2 rounded-lg shrink-0 ${saleMode === 'WEIGHT' ? 'bg-brand-primary text-white' : 'bg-surface text-text-tertiary'}`}>
+                  <Scale size={18} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-text-primary">Por Peso / Granel</div>
+                  <div className="text-[11px] text-text-tertiary mt-0.5">
+                    Venta pesada (kg/g) con cálculo exacto por balanza o manual.
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pt-2">
             {/* Sale Price with MoneyInput */}
             <MoneyInput
-              label="Precio de venta"
+              label={saleMode === 'WEIGHT' ? 'Precio de venta por kg' : 'Precio de venta'}
               valueMinor={salePriceMinor}
               onChangeMinor={(minor) => {
                 setSalePriceMinor(minor);
@@ -534,11 +595,12 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
               currency={currency}
               required
               placeholder="0"
+              helperText={saleMode === 'WEIGHT' ? 'Precio por 1 kilogramo (1.000 g).' : undefined}
             />
 
             {/* Reference Cost with MoneyInput */}
             <MoneyInput
-              label="Costo de referencia (Opcional)"
+              label={saleMode === 'WEIGHT' ? 'Costo de referencia por kg' : 'Costo de referencia (Opcional)'}
               valueMinor={costPriceMinor}
               onChangeMinor={(minor) => {
                 setCostPriceMinor(minor);
@@ -546,17 +608,29 @@ export const ProductFormPage: React.FC<ProductFormPageProps> = ({
               }}
               currency={currency}
               placeholder="0"
-              helperText="Costo inicial estimado para inventario."
+              helperText={saleMode === 'WEIGHT' ? 'Costo estimado por 1 kilogramo.' : 'Costo inicial estimado para inventario.'}
             />
 
             {/* Base Unit with HeroUI Select */}
-            <BaseUnitSelect
-              value={baseUnit}
-              onChange={(newUnit) => {
-                setBaseUnit(newUnit);
-                setIsDirty(true);
-              }}
-            />
+            {saleMode === 'WEIGHT' ? (
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">
+                  Unidad base
+                </label>
+                <div className="px-3.5 py-2.5 bg-surface-secondary/70 border border-border-default rounded-xl text-text-primary text-sm font-medium">
+                  Kilogramo (KG)
+                </div>
+                <p className="text-[11px] text-text-tertiary mt-1">El stock se descuenta en gramos.</p>
+              </div>
+            ) : (
+              <BaseUnitSelect
+                value={baseUnit}
+                onChange={(newUnit) => {
+                  setBaseUnit(newUnit);
+                  setIsDirty(true);
+                }}
+              />
+            )}
           </div>
         </div>
 

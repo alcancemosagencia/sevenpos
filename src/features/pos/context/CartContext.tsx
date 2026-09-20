@@ -12,21 +12,26 @@ import {
 import { QUANTITY_SCALE, toScaledQuantity } from '../../../domain/common/quantity/Quantity';
 import { generateUuid } from '../../../domain/common/IdGenerator';
 import { useAuth } from '../../../context/AuthContext';
+import { calculateWeightedLineTotal } from '../../../domain/sales/WeightedMath';
+import { SaleLineType, SaleLineSaleMode } from '../../../domain/sales/SaleItem';
 import { logger } from '../../../infrastructure/logging/Logger';
 
-const CART_SCHEMA_VERSION = 1;
+const CART_SCHEMA_VERSION = 2;
 
 export interface CartLine {
   lineId: string;
-  productId: string;
+  productId: string | null; // Nullable for OPEN_AMOUNT
   presentationId: string | null;
   productName: string;
   presentationName: string | null;
   displayName: string;
   baseUnit: BaseUnitCode;
   unitFactor: number;
+  lineType: SaleLineType; // 'PRODUCT' | 'OPEN_AMOUNT'
+  saleMode: SaleLineSaleMode; // 'UNIT' | 'WEIGHT'
+  weightGrams?: number | null; // Integer grams if saleMode === 'WEIGHT'
   unitPrice: number; // Minor currency integer
-  quantity: number; // Scaled integer (scale: 1000)
+  quantity: number; // Scaled integer (scale: 1000) or grams or 1000 for open amount
   grossLineTotal: number; // Minor currency integer
   discountTotal: number; // Minor currency integer
   lineTotal: number; // Minor currency integer
@@ -61,6 +66,9 @@ interface CartContextType {
   customerId: string | null;
   customerName: string;
   addItem: (product: Product, presentation?: ProductPresentation | null, quantityMajor?: number, availableStock?: number) => void;
+  addWeightedItem: (product: Product, grams: number, availableStock?: number) => void;
+  updateWeightedGrams: (lineId: string, grams: number) => void;
+  addOpenAmountItem: (amountMinor: number, description?: string) => void;
   updateQuantity: (lineId: string, quantityScaled: number) => void;
   incrementQuantity: (lineId: string) => void;
   decrementQuantity: (lineId: string) => void;
@@ -185,7 +193,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
   }, [subtotal, calculatedDiscountTotal]);
 
   const itemCount = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.quantity / QUANTITY_SCALE), 0);
+    return items.reduce((sum, item) => {
+      if (item.lineType === 'OPEN_AMOUNT') return sum + 1;
+      if (item.saleMode === 'WEIGHT') return sum + 1;
+      return sum + (item.quantity / QUANTITY_SCALE);
+    }, 0);
   }, [items]);
 
   // Re-distribute line discounts and calculate lineTotals whenever items or discount changes
@@ -212,8 +224,118 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
     });
   }, [items, calculatedDiscountTotal]);
 
+  const addWeightedItem = useCallback((product: Product, grams: number, availableStock?: number) => {
+    if (grams <= 0) return;
+    setItems((prev) => {
+      const unitPrice = product.salePrice; // Price per kg
+      const grossLineTotal = calculateWeightedLineTotal(unitPrice, grams);
+
+      // Check if product is already in cart as weighted line
+      const existingIdx = prev.findIndex(
+        (i) => i.productId === product.id && i.saleMode === 'WEIGHT' && i.unitPrice === unitPrice
+      );
+
+      if (existingIdx >= 0) {
+        const existing = prev[existingIdx];
+        const nextGrams = (existing.weightGrams ?? existing.quantity) + grams;
+        const nextGross = calculateWeightedLineTotal(unitPrice, nextGrams);
+
+        const updated = [...prev];
+        updated[existingIdx] = {
+          ...existing,
+          weightGrams: nextGrams,
+          quantity: nextGrams,
+          grossLineTotal: nextGross,
+          lineTotal: nextGross,
+          availableStock: availableStock !== undefined ? availableStock : existing.availableStock,
+        };
+        return updated;
+      }
+
+      const newLine: CartLine = {
+        lineId: generateUuid(),
+        productId: product.id,
+        presentationId: null,
+        productName: product.name,
+        presentationName: null,
+        displayName: product.name,
+        baseUnit: product.baseUnit || 'KG',
+        unitFactor: 1,
+        lineType: 'PRODUCT',
+        saleMode: 'WEIGHT',
+        weightGrams: grams,
+        unitPrice,
+        quantity: grams,
+        grossLineTotal,
+        discountTotal: 0,
+        lineTotal: grossLineTotal,
+        availableStock,
+        sku: product.sku || null,
+        barcode: product.barcode || null,
+        imagePath: product.imagePath || null,
+      };
+
+      return [...prev, newLine];
+    });
+  }, []);
+
+  const updateWeightedGrams = useCallback((lineId: string, grams: number) => {
+    setItems((prev) => {
+      if (grams <= 0) {
+        return prev.filter((i) => i.lineId !== lineId);
+      }
+      return prev.map((item) => {
+        if (item.lineId !== lineId) return item;
+        const gross = calculateWeightedLineTotal(item.unitPrice, grams);
+        return {
+          ...item,
+          weightGrams: grams,
+          quantity: grams,
+          grossLineTotal: gross,
+          lineTotal: gross,
+        };
+      });
+    });
+  }, []);
+
+  const addOpenAmountItem = useCallback((amountMinor: number, description?: string) => {
+    if (amountMinor <= 0) return;
+    const desc = description?.trim() || 'Monto libre';
+    setItems((prev) => {
+      const newLine: CartLine = {
+        lineId: generateUuid(),
+        productId: null,
+        presentationId: null,
+        productName: desc,
+        presentationName: null,
+        displayName: desc,
+        baseUnit: 'UNIT',
+        unitFactor: 1,
+        lineType: 'OPEN_AMOUNT',
+        saleMode: 'UNIT',
+        weightGrams: null,
+        unitPrice: amountMinor,
+        quantity: 1000,
+        grossLineTotal: amountMinor,
+        discountTotal: 0,
+        lineTotal: amountMinor,
+        availableStock: undefined,
+        sku: null,
+        barcode: null,
+        imagePath: null,
+      };
+      return [...prev, newLine];
+    });
+  }, []);
+
   const addItem = useCallback(
     (product: Product, presentation?: ProductPresentation | null, quantityMajor = 1, availableStock?: number) => {
+      if (product.saleMode === 'WEIGHT') {
+        const grams = Math.round(quantityMajor * 1000);
+        addWeightedItem(product, grams, availableStock);
+        return;
+      }
+
       setItems((prev) => {
         const presentationId = presentation?.id || null;
         const unitFactor = presentation ? presentation.unitFactor : 1;
@@ -253,6 +375,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
           displayName,
           baseUnit: product.baseUnit,
           unitFactor,
+          lineType: 'PRODUCT',
+          saleMode: 'UNIT',
+          weightGrams: null,
           unitPrice,
           quantity: qtyScaledToAdd,
           grossLineTotal,
@@ -267,7 +392,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
         return [...prev, newLine];
       });
     },
-    []
+    [addWeightedItem]
   );
 
   const updateQuantity = useCallback((lineId: string, quantityScaled: number) => {
@@ -277,10 +402,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
       }
       return prev.map((item) => {
         if (item.lineId !== lineId) return item;
-        const gross = calculateGrossLineTotal(quantityScaled, item.unitPrice);
+        const isWeight = item.saleMode === 'WEIGHT';
+        const gross = isWeight
+          ? calculateWeightedLineTotal(item.unitPrice, quantityScaled)
+          : calculateGrossLineTotal(quantityScaled, item.unitPrice);
         return {
           ...item,
           quantity: quantityScaled,
+          weightGrams: isWeight ? quantityScaled : null,
           grossLineTotal: gross,
           lineTotal: gross,
         };
@@ -348,7 +477,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
   }, []);
 
   const setNote = useCallback((n: string) => {
-    setNoteState(n || '');
+    setNoteState(n);
   }, []);
 
   const clearCart = useCallback(() => {
@@ -370,12 +499,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
     (updatedPrices: { productId: string; presentationId?: string | null; officialUnitPrice: number }[]) => {
       setItems((prev) => {
         return prev.map((item) => {
+          if (!item.productId) return item;
           const match = updatedPrices.find(
             (u) => u.productId === item.productId && (u.presentationId || null) === (item.presentationId || null)
           );
           if (match) {
             const newUnitPrice = match.officialUnitPrice;
-            const newGross = calculateGrossLineTotal(item.quantity, newUnitPrice);
+            const isWeight = item.saleMode === 'WEIGHT';
+            const newGross = isWeight
+              ? calculateWeightedLineTotal(newUnitPrice, item.weightGrams || item.quantity)
+              : calculateGrossLineTotal(item.quantity, newUnitPrice);
             return {
               ...item,
               unitPrice: newUnitPrice,
@@ -403,6 +536,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode; businessId?: st
         customerId,
         customerName,
         addItem,
+        addWeightedItem,
+        updateWeightedGrams,
+        addOpenAmountItem,
         updateQuantity,
         incrementQuantity,
         decrementQuantity,
@@ -434,6 +570,9 @@ export const useCart = (): CartContextType => {
       customerId: null,
       customerName: 'Consumidor final',
       addItem: () => {},
+      addWeightedItem: () => {},
+      updateWeightedGrams: () => {},
+      addOpenAmountItem: () => {},
       updateQuantity: () => {},
       incrementQuantity: () => {},
       decrementQuantity: () => {},

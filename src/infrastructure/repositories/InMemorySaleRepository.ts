@@ -286,6 +286,9 @@ export class InMemorySaleRepository implements SaleRepository {
     >();
 
     for (const item of periodItems) {
+      if (item.lineType === 'OPEN_AMOUNT' || !item.productId) {
+        continue;
+      }
       const existing = prodMap.get(item.productId) || {
         name: item.productNameSnapshot,
         baseUnit: item.baseUnit,

@@ -19,6 +19,7 @@ export interface CreateProductDTO {
   minimumStock?: number | null;
   imagePath?: string | null;
   featured?: boolean;
+  saleMode?: 'UNIT' | 'WEIGHT';
 }
 
 export class CreateProduct {
@@ -98,6 +99,7 @@ export class CreateProduct {
       minimumStock: dto.minimumStock ?? null,
       imagePath: dto.imagePath || null,
       featured: dto.featured ?? false,
+      saleMode: dto.saleMode || 'UNIT',
       active: true,
       createdAt: now,
       updatedAt: now,

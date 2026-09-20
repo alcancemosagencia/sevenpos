@@ -28,6 +28,8 @@ describe('POS-UX-HOTFIX-CART-01: Rediseño de Items del Carrito', () => {
     presentationName: null,
     displayName: 'Espaguetti',
     baseUnit: 'UNIT',
+    lineType: 'PRODUCT',
+    saleMode: 'UNIT',
     unitFactor: 1,
     unitPrice: 340,
     quantity: 1000, // 1 UNIT

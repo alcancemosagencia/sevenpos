@@ -75,15 +75,17 @@ export const ReceiptDocument: React.FC<ReceiptDocumentProps> = ({
               <span className="truncate pr-2">{it.displayName}</span>
               <span className="shrink-0">{it.lineTotalFormatted}</span>
             </div>
-            <div className="flex justify-between text-[10px] text-text-tertiary">
-              <span>
-                {it.quantityFormatted} × {it.unitPriceFormatted}
-                {it.presentationName ? ` (${it.presentationName})` : ''}
-              </span>
-              {it.discountFormatted && (
-                <span className="text-status-success">Desc: {it.discountFormatted}</span>
-              )}
-            </div>
+            {(it.quantityFormatted || it.presentationName || it.discountFormatted) && (
+              <div className="flex justify-between text-[10px] text-text-tertiary">
+                <span>
+                  {it.quantityFormatted ? `${it.quantityFormatted} × ${it.unitPriceFormatted}` : ''}
+                  {it.presentationName ? ` (${it.presentationName})` : ''}
+                </span>
+                {it.discountFormatted && (
+                  <span className="text-status-success">Desc: {it.discountFormatted}</span>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

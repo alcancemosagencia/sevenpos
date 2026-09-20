@@ -54,9 +54,15 @@ export function formatReceiptText(receipt: ReceiptDTO, format: '80mm' | '58mm' =
       const itemDesc = item.presentationName
         ? `${item.displayName} (${item.presentationName})`
         : item.displayName;
-      lines.push(itemDesc);
-      const qtyLine = `  ${item.quantityFormatted} x ${item.unitPriceFormatted}`;
-      lines.push(justify(qtyLine, item.lineTotalFormatted));
+
+      if (item.quantityFormatted && item.quantityFormatted.trim().length > 0) {
+        lines.push(itemDesc);
+        const qtyLine = `  ${item.quantityFormatted} x ${item.unitPriceFormatted}`;
+        lines.push(justify(qtyLine, item.lineTotalFormatted));
+      } else {
+        lines.push(justify(itemDesc, item.lineTotalFormatted));
+      }
+
       if (item.discountFormatted) {
         lines.push(justify('  Descuento:', `-${item.discountFormatted}`));
       }

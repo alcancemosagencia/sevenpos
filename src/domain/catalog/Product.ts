@@ -1,5 +1,7 @@
 import { BaseUnitCode } from '../common/unit/BaseUnit';
 
+export type ProductSaleMode = 'UNIT' | 'WEIGHT';
+
 export interface Product {
   id: string;
   businessId: string;
@@ -9,7 +11,8 @@ export interface Product {
   sku?: string | null;
   barcode?: string | null;
   baseUnit: BaseUnitCode;
-  salePrice: number; // Integer minor units (e.g. 12500 CLP, 1250 cents USD)
+  saleMode?: ProductSaleMode; // 'UNIT' (default) or 'WEIGHT' (sold by weight, price is per kg)
+  salePrice: number; // Integer minor units (price per unit if UNIT, price per kg if WEIGHT)
   costPrice?: number | null; // Reference cost in integer minor units
   minimumStock?: number | null; // Threshold reference for future inventory
   imagePath?: string | null;

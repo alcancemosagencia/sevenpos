@@ -33,12 +33,15 @@ interface SaleItemRow {
   id: string;
   business_id: string;
   sale_id: string;
-  product_id: string;
+  product_id: string | null;
   presentation_id: string | null;
   product_name_snapshot: string;
   presentation_name_snapshot: string | null;
   base_unit: string;
   presentation_factor: number;
+  line_type?: string;
+  sale_mode?: string;
+  weight_grams?: number | null;
   quantity: number;
   inventory_quantity_delta: number;
   unit_price: number;
@@ -101,12 +104,15 @@ export class SqliteSaleRepository implements SaleRepository {
       id: r.id,
       businessId: r.business_id,
       saleId: r.sale_id,
-      productId: r.product_id,
+      productId: r.product_id || null,
       presentationId: r.presentation_id,
       productNameSnapshot: r.product_name_snapshot,
       presentationNameSnapshot: r.presentation_name_snapshot,
       baseUnit: r.base_unit as import('../../domain/common/unit/BaseUnit').BaseUnitCode,
       presentationFactor: r.presentation_factor,
+      lineType: (r.line_type as import('../../domain/sales/SaleItem').SaleLineType) || 'PRODUCT',
+      saleMode: (r.sale_mode as import('../../domain/sales/SaleItem').SaleLineSaleMode) || 'UNIT',
+      weightGrams: r.weight_grams ?? null,
       quantity: r.quantity,
       inventoryQuantityDelta: r.inventory_quantity_delta,
       unitPrice: r.unit_price,
@@ -225,21 +231,24 @@ export class SqliteSaleRepository implements SaleRepository {
         await db.execute(
           `INSERT INTO sale_items (
             id, business_id, sale_id, product_id, presentation_id, product_name_snapshot,
-            presentation_name_snapshot, base_unit, presentation_factor, quantity,
-            inventory_quantity_delta, unit_price, discount_total, line_total,
-            unit_cost_snapshot, line_cost_total, cost_quality_snapshot,
+            presentation_name_snapshot, base_unit, presentation_factor, line_type, sale_mode,
+            weight_grams, quantity, inventory_quantity_delta, unit_price, discount_total,
+            line_total, unit_cost_snapshot, line_cost_total, cost_quality_snapshot,
             sku_snapshot, barcode_snapshot, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             item.id,
             item.businessId,
             item.saleId,
-            item.productId,
+            item.productId || null,
             item.presentationId || null,
             item.productNameSnapshot,
             item.presentationNameSnapshot || null,
             item.baseUnit,
             item.presentationFactor,
+            item.lineType || 'PRODUCT',
+            item.saleMode || 'UNIT',
+            item.weightGrams ?? null,
             item.quantity,
             item.inventoryQuantityDelta,
             item.unitPrice,
@@ -689,6 +698,8 @@ export class SqliteSaleRepository implements SaleRepository {
           AND s.completed_at >= ? 
           AND s.completed_at < ? 
           AND s.status = 'COMPLETED'
+          AND si.product_id IS NOT NULL
+          AND (si.line_type IS NULL OR si.line_type != 'OPEN_AMOUNT')
         GROUP BY si.product_id, si.product_name_snapshot, si.base_unit
         ORDER BY total_revenue DESC, total_quantity_scaled DESC
         LIMIT ?`,

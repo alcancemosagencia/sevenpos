@@ -23,6 +23,7 @@ interface ProductRow {
   sku: string | null;
   barcode: string | null;
   base_unit: string;
+  sale_mode?: string;
   sale_price: number;
   cost_price: number | null;
   minimum_stock: number | null;
@@ -59,7 +60,7 @@ export class SqliteProductRepository implements ProductRepository {
     try {
       const db = await this.getDb();
       const rows = await db.select<ProductRow[]>(
-        'SELECT id, business_id, category_id, name, description, sku, barcode, base_unit, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at FROM products WHERE id = $1 AND business_id = $2 LIMIT 1;',
+        'SELECT id, business_id, category_id, name, description, sku, barcode, base_unit, sale_mode, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at FROM products WHERE id = $1 AND business_id = $2 LIMIT 1;',
         [id, businessId]
       );
       if (!rows || rows.length === 0) return null;
@@ -123,7 +124,7 @@ export class SqliteProductRepository implements ProductRepository {
     try {
       const db = await this.getDb();
       const rows = await db.select<ProductRow[]>(
-        'SELECT id, business_id, category_id, name, description, sku, barcode, base_unit, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at FROM products WHERE UPPER(TRIM(sku)) = UPPER(TRIM($1)) AND business_id = $2 LIMIT 1;',
+        'SELECT id, business_id, category_id, name, description, sku, barcode, base_unit, sale_mode, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at FROM products WHERE UPPER(TRIM(sku)) = UPPER(TRIM($1)) AND business_id = $2 LIMIT 1;',
         [sku, businessId]
       );
       if (!rows || rows.length === 0) return null;
@@ -138,7 +139,7 @@ export class SqliteProductRepository implements ProductRepository {
     try {
       const db = await this.getDb();
       const rows = await db.select<ProductRow[]>(
-        'SELECT id, business_id, category_id, name, description, sku, barcode, base_unit, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at FROM products WHERE TRIM(barcode) = TRIM($1) AND business_id = $2 LIMIT 1;',
+        'SELECT id, business_id, category_id, name, description, sku, barcode, base_unit, sale_mode, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at FROM products WHERE TRIM(barcode) = TRIM($1) AND business_id = $2 LIMIT 1;',
         [barcode, businessId]
       );
       if (!rows || rows.length === 0) return null;
@@ -214,7 +215,7 @@ export class SqliteProductRepository implements ProductRepository {
       const itemsSql = `
         SELECT 
           p.id, p.business_id, p.category_id, p.name, p.description, p.sku, p.barcode, 
-          p.base_unit, p.sale_price, p.cost_price, p.minimum_stock, p.image_path, p.featured, 
+          p.base_unit, p.sale_mode, p.sale_price, p.cost_price, p.minimum_stock, p.image_path, p.featured, 
           p.active, p.created_at, p.updated_at,
           c.name as category_name, c.color as category_color, c.active as category_active,
           c.created_at as category_created_at, c.updated_at as category_updated_at,
@@ -298,8 +299,8 @@ export class SqliteProductRepository implements ProductRepository {
     try {
       const db = await this.getDb();
       await db.execute(
-        `INSERT INTO products (id, business_id, category_id, name, description, sku, barcode, base_unit, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`,
+        `INSERT INTO products (id, business_id, category_id, name, description, sku, barcode, base_unit, sale_mode, sale_price, cost_price, minimum_stock, image_path, featured, active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);`,
         [
           product.id,
           product.businessId,
@@ -309,6 +310,7 @@ export class SqliteProductRepository implements ProductRepository {
           product.sku || null,
           product.barcode || null,
           product.baseUnit,
+          product.saleMode || 'UNIT',
           product.salePrice,
           product.costPrice ?? null,
           product.minimumStock ?? null,
@@ -337,6 +339,7 @@ export class SqliteProductRepository implements ProductRepository {
           salePrice: product.salePrice,
           costPrice: product.costPrice ?? null,
           baseUnit: product.baseUnit,
+          saleMode: product.saleMode || 'UNIT',
         },
       });
     } catch (err) {
@@ -349,8 +352,8 @@ export class SqliteProductRepository implements ProductRepository {
     try {
       const db = await this.getDb();
       await db.execute(
-        `UPDATE products SET category_id = $1, name = $2, description = $3, sku = $4, barcode = $5, base_unit = $6, sale_price = $7, cost_price = $8, minimum_stock = $9, image_path = $10, featured = $11, active = $12, updated_at = $13
-         WHERE id = $14 AND business_id = $15;`,
+        `UPDATE products SET category_id = $1, name = $2, description = $3, sku = $4, barcode = $5, base_unit = $6, sale_mode = $7, sale_price = $8, cost_price = $9, minimum_stock = $10, image_path = $11, featured = $12, active = $13, updated_at = $14
+         WHERE id = $15 AND business_id = $16;`,
         [
           product.categoryId || null,
           product.name,
@@ -358,6 +361,7 @@ export class SqliteProductRepository implements ProductRepository {
           product.sku || null,
           product.barcode || null,
           product.baseUnit,
+          product.saleMode || 'UNIT',
           product.salePrice,
           product.costPrice ?? null,
           product.minimumStock ?? null,
@@ -385,6 +389,7 @@ export class SqliteProductRepository implements ProductRepository {
           salePrice: product.salePrice,
           costPrice: product.costPrice ?? null,
           active: product.active,
+          saleMode: product.saleMode || 'UNIT',
         },
       });
     } catch (err) {
@@ -468,6 +473,7 @@ export class SqliteProductRepository implements ProductRepository {
       sku: row.sku,
       barcode: row.barcode,
       baseUnit: (row.base_unit as BaseUnitCode) || 'UNIT',
+      saleMode: (row.sale_mode as import('../../domain/catalog/Product').ProductSaleMode) || 'UNIT',
       salePrice: row.sale_price,
       costPrice: row.cost_price,
       minimumStock: row.minimum_stock,

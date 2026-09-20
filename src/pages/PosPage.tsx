@@ -14,6 +14,7 @@ import { CartProvider, useCart } from '../features/pos/context/CartContext';
 import { PosProductGrid } from '../features/pos/components/PosProductGrid';
 import { PosCartPanel } from '../features/pos/components/PosCartPanel';
 import { PosPresentationModal } from '../features/pos/components/PosPresentationModal';
+import { WeightedProductModal } from '../features/pos/components/WeightedProductModal';
 import { PosCheckoutModal, CheckoutPaymentRow } from '../features/pos/components/PosCheckoutModal';
 import { PosReceiptModal } from '../features/pos/components/PosReceiptModal';
 import { PosPriceChangedModal } from '../features/pos/components/PosPriceChangedModal';
@@ -50,6 +51,7 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
     note,
     globalDiscount,
     addItem,
+    addWeightedItem,
     clearCart,
     updatePricesFromConflict,
   } = useCart();
@@ -70,9 +72,10 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedFilterType, setSelectedFilterType] = useState<'ALL' | 'FEATURED' | 'CATEGORY'>('ALL');
 
-  // Presentation Modal
+  // Presentation & Weighted Modals
   const [selectedProductForPres, setSelectedProductForPres] = useState<Product | null>(null);
   const [availablePresForModal, setAvailablePresForModal] = useState<ProductPresentation[]>([]);
+  const [selectedProductForWeight, setSelectedProductForWeight] = useState<Product | null>(null);
 
   // Checkout & Receipt Modal
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -179,7 +182,11 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
     presentations,
     movementRepo,
     onBarcodeMatched: (prod, pres, availableStock) => {
-      addItem(prod, pres, 1, availableStock);
+      if (prod.saleMode === 'WEIGHT') {
+        setSelectedProductForWeight(prod);
+      } else {
+        addItem(prod, pres, 1, availableStock);
+      }
     },
     onScanError: (msg) => {
       console.warn('Scanner notice:', msg);
@@ -191,6 +198,10 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
   const handleSelectProduct = (product: Product) => {
     const stock = stockMap.get(product.id) || 0;
     if (stock <= 0) return;
+    if (product.saleMode === 'WEIGHT') {
+      setSelectedProductForWeight(product);
+      return;
+    }
     addItem(product, null, 1, stock);
   };
 
@@ -201,6 +212,11 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
 
   const handleSelectBaseFromModal = (product: Product) => {
     const stock = stockMap.get(product.id) || 0;
+    if (product.saleMode === 'WEIGHT') {
+      setSelectedProductForWeight(product);
+      setSelectedProductForPres(null);
+      return;
+    }
     addItem(product, null, 1, stock);
     setSelectedProductForPres(null);
   };
@@ -251,6 +267,10 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
       const payloadItems = items.map((i) => ({
         productId: i.productId,
         presentationId: i.presentationId,
+        lineType: i.lineType,
+        saleMode: i.saleMode,
+        weightGrams: i.weightGrams,
+        customDescription: i.lineType === 'OPEN_AMOUNT' ? i.productName : undefined,
         quantity: i.quantity,
         expectedUnitPrice: i.unitPrice,
         expectedLineTotal: i.lineTotal,
@@ -444,6 +464,20 @@ const PosWorkspaceContent: React.FC<PosWorkspaceContentProps> = ({ onNavigate })
         onClose={() => setSelectedProductForPres(null)}
         onSelectBaseProduct={handleSelectBaseFromModal}
         onSelectPresentation={handleSelectPresFromModal}
+      />
+
+      {/* Weighted Product Selection Modal */}
+      <WeightedProductModal
+        isOpen={Boolean(selectedProductForWeight)}
+        product={selectedProductForWeight}
+        availableStockGrams={selectedProductForWeight ? stockMap.get(selectedProductForWeight.id) || 0 : 0}
+        currency={currency}
+        onClose={() => setSelectedProductForWeight(null)}
+        onConfirm={(product, grams) => {
+          const stock = stockMap.get(product.id) || 0;
+          addWeightedItem(product, grams, stock);
+          setSelectedProductForWeight(null);
+        }}
       />
 
       {/* Checkout Modal */}

@@ -19,6 +19,7 @@ export interface UpdateProductDTO {
   imagePath?: string | null;
   featured?: boolean;
   active?: boolean;
+  saleMode?: 'UNIT' | 'WEIGHT';
 }
 
 export class UpdateProduct {
@@ -89,6 +90,7 @@ export class UpdateProduct {
       minimumStock: dto.minimumStock !== undefined ? dto.minimumStock : existing.minimumStock,
       imagePath: dto.imagePath !== undefined ? dto.imagePath : existing.imagePath,
       featured: dto.featured !== undefined ? dto.featured : existing.featured,
+      saleMode: dto.saleMode !== undefined ? dto.saleMode : existing.saleMode,
       active: dto.active !== undefined ? dto.active : existing.active,
       updatedAt: now,
     };

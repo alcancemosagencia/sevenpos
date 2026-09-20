@@ -742,6 +742,8 @@ export class OperationalAnalyticsService {
               AND s.completed_at >= ? 
               AND s.completed_at <= ? 
               AND s.status = 'COMPLETED'
+              AND si.product_id IS NOT NULL
+              AND (si.line_type IS NULL OR si.line_type != 'OPEN_AMOUNT')
             GROUP BY si.product_id, si.product_name_snapshot, c.name, si.base_unit
             ORDER BY total_revenue DESC, total_quantity_scaled DESC
             LIMIT ?`,

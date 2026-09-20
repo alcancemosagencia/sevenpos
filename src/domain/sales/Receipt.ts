@@ -3,6 +3,7 @@ import { SaleItem } from './SaleItem';
 import { SalePayment } from './SalePayment';
 import { formatMoney } from '../common/money/Money';
 import { CurrencyCode } from '../../types/country';
+import { formatWeightDisplay } from './WeightedMath';
 
 export interface ReceiptItemDTO {
   displayName: string;
@@ -70,15 +71,37 @@ export function buildReceiptDTO(
     cashierName: sale.createdByNameSnapshot,
     customerName: sale.customerNameSnapshot,
     items: items.map((item) => {
-      const isWhole = item.quantity % 1000 === 0;
-      const qtyMajor = item.quantity / 1000;
-      const qtyDisplay = isWhole ? String(qtyMajor) : qtyMajor.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+      const isOpenAmount = item.lineType === 'OPEN_AMOUNT';
+      const isWeight = item.saleMode === 'WEIGHT' || (item.weightGrams != null && item.weightGrams > 0);
+
+      let quantityFormatted: string;
+      let unitPriceFormatted: string;
+
+      if (isOpenAmount) {
+        quantityFormatted = '';
+        unitPriceFormatted = formatMoney(item.unitPrice, curr);
+      } else if (isWeight) {
+        const grams = item.weightGrams || item.quantity;
+        quantityFormatted = formatWeightDisplay(grams);
+        unitPriceFormatted = `${formatMoney(item.unitPrice, curr)}/kg`;
+      } else {
+        const isWhole = item.quantity % 1000 === 0;
+        const qtyMajor = item.quantity / 1000;
+        const qtyDisplay = isWhole ? String(qtyMajor) : qtyMajor.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+        quantityFormatted = `${qtyDisplay} ${item.baseUnit.toLowerCase()}`;
+        unitPriceFormatted = formatMoney(item.unitPrice, curr);
+      }
+
+      const displayName = isOpenAmount
+        ? (item.productNameSnapshot && item.productNameSnapshot.trim().length > 0 ? item.productNameSnapshot.trim() : 'Monto libre')
+        : item.productNameSnapshot;
+
       return {
-        displayName: item.productNameSnapshot,
+        displayName,
         presentationName: item.presentationNameSnapshot,
-        baseUnit: item.baseUnit,
-        quantityFormatted: `${qtyDisplay} ${item.baseUnit.toLowerCase()}`,
-        unitPriceFormatted: formatMoney(item.unitPrice, curr),
+        baseUnit: isOpenAmount ? '' : item.baseUnit,
+        quantityFormatted,
+        unitPriceFormatted,
         discountFormatted: item.discountTotal > 0 ? formatMoney(item.discountTotal, curr) : null,
         lineTotalFormatted: formatMoney(item.lineTotal, curr),
       };

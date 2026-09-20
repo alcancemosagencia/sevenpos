@@ -59,7 +59,7 @@ export class InMemoryProductRepository implements ProductRepository {
   async getById(id: string, businessId: string): Promise<Product | null> {
     this.loadFromDevStorage();
     const p = this.products.get(`${businessId}:${id}`);
-    return p ? { ...p } : null;
+    return p ? { ...p, saleMode: p.saleMode || 'UNIT' } : null;
   }
 
   async getDetailById(id: string, businessId: string): Promise<ProductDetailWithPresentations | null> {
@@ -86,7 +86,7 @@ export class InMemoryProductRepository implements ProductRepository {
     const clean = sku.trim().toUpperCase();
     for (const p of this.products.values()) {
       if (p.businessId === businessId && p.sku && p.sku.trim().toUpperCase() === clean) {
-        return { ...p };
+        return { ...p, saleMode: p.saleMode || 'UNIT' };
       }
     }
     return null;
@@ -97,7 +97,7 @@ export class InMemoryProductRepository implements ProductRepository {
     const clean = barcode.trim();
     for (const p of this.products.values()) {
       if (p.businessId === businessId && p.barcode && p.barcode.trim() === clean) {
-        return { ...p };
+        return { ...p, saleMode: p.saleMode || 'UNIT' };
       }
     }
     return null;
@@ -186,7 +186,7 @@ export class InMemoryProductRepository implements ProductRepository {
       }
       const presentationCount = await this.presentationRepo.countByProduct(prod.id, prod.businessId);
       items.push({
-        product: { ...prod },
+        product: { ...prod, saleMode: prod.saleMode || 'UNIT' },
         category,
         presentationCount,
       });
@@ -232,12 +232,12 @@ export class InMemoryProductRepository implements ProductRepository {
   }
 
   async save(product: Product): Promise<void> {
-    this.products.set(`${product.businessId}:${product.id}`, { ...product });
+    this.products.set(`${product.businessId}:${product.id}`, { ...product, saleMode: product.saleMode || 'UNIT' });
     this.saveToDevStorage();
   }
 
   async update(product: Product): Promise<void> {
-    this.products.set(`${product.businessId}:${product.id}`, { ...product });
+    this.products.set(`${product.businessId}:${product.id}`, { ...product, saleMode: product.saleMode || 'UNIT' });
     this.saveToDevStorage();
   }
 

@@ -17,6 +17,7 @@ import {
   calculateGlobalDiscountTotal,
   GlobalDiscountInput,
 } from '../../domain/common/money/MoneyMath';
+import { calculateWeightedLineTotal, formatWeightDisplay } from '../../domain/sales/WeightedMath';
 import { allocateStockForSale } from '../../domain/inventory/services/LotAllocationService';
 import { generateUuid } from '../../domain/common/IdGenerator';
 import { getCurrentUtcIsoString } from '../../domain/common/Timestamp';
@@ -28,9 +29,13 @@ import { CashSessionRepository } from '../../domain/cash/repositories/CashSessio
 import { CashMovement } from '../../domain/cash/CashMovement';
 
 export interface CompleteSaleItemInput {
-  productId: string;
+  productId?: string | null; // Nullable for OPEN_AMOUNT
   presentationId?: string | null;
-  quantity: number; // Scaled integer (scale: 1000)
+  lineType?: 'PRODUCT' | 'OPEN_AMOUNT';
+  saleMode?: 'UNIT' | 'WEIGHT';
+  weightGrams?: number | null; // Integer grams if saleMode === 'WEIGHT'
+  customDescription?: string; // Snapshot description for OPEN_AMOUNT
+  quantity: number; // Scaled integer (scale: 1000) or weight in grams or 1000 for OPEN_AMOUNT
   expectedUnitPrice: number; // Minor currency integer
   expectedLineTotal?: number;
 }
@@ -159,7 +164,9 @@ export class CompleteSale {
     // 2. Authoritative Catalog Revalidation & Price Conflict Detection
     interface ValidatedItemData {
       inputItem: CompleteSaleItemInput;
-      product: import('../../domain/catalog/Product').Product;
+      isOpenAmount: boolean;
+      isWeight: boolean;
+      product: import('../../domain/catalog/Product').Product | null;
       presentation: import('../../domain/catalog/ProductPresentation').ProductPresentation | null;
       unitFactor: number;
       officialUnitPrice: number;
@@ -173,6 +180,38 @@ export class CompleteSale {
     let hasPriceConflict = false;
 
     for (const item of input.items) {
+      if (item.lineType === 'OPEN_AMOUNT') {
+        if (!item.expectedUnitPrice || item.expectedUnitPrice <= 0 || !Number.isSafeInteger(item.expectedUnitPrice)) {
+          return {
+            success: false,
+            error: 'El importe del monto libre debe ser un entero positivo.',
+            errorType: 'PAYMENT_MISMATCH',
+          };
+        }
+
+        validatedItems.push({
+          inputItem: item,
+          isOpenAmount: true,
+          isWeight: false,
+          product: null,
+          presentation: null,
+          unitFactor: 1,
+          officialUnitPrice: item.expectedUnitPrice,
+          grossLineTotal: item.expectedUnitPrice,
+          unitCostSnapshot: null,
+          costQuality: 'UNKNOWN',
+        });
+        continue;
+      }
+
+      if (!item.productId) {
+        return {
+          success: false,
+          error: 'El identificador del producto es requerido.',
+          errorType: 'PRODUCT_INACTIVE',
+        };
+      }
+
       const product = await this.productRepo.getById(item.productId, input.businessId);
       if (!product || !product.active || product.businessId !== input.businessId) {
         return {
@@ -206,7 +245,22 @@ export class CompleteSale {
         });
       }
 
-      const grossLineTotal = calculateGrossLineTotal(item.quantity, officialUnitPrice);
+      const isWeight = product.saleMode === 'WEIGHT' || item.saleMode === 'WEIGHT';
+      let grossLineTotal: number;
+
+      if (isWeight) {
+        const grams = item.weightGrams ?? item.quantity;
+        if (!Number.isSafeInteger(grams) || grams <= 0) {
+          return {
+            success: false,
+            error: `El peso para "${product.name}" debe ser un entero positivo en gramos.`,
+            errorType: 'PAYMENT_MISMATCH',
+          };
+        }
+        grossLineTotal = calculateWeightedLineTotal(officialUnitPrice, grams);
+      } else {
+        grossLineTotal = calculateGrossLineTotal(item.quantity, officialUnitPrice);
+      }
 
       // Query latest unit cost from WAC foundation
       const movements = await this.movementRepo.listByProduct(product.id, input.businessId);
@@ -216,6 +270,8 @@ export class CompleteSale {
 
       validatedItems.push({
         inputItem: item,
+        isOpenAmount: false,
+        isWeight,
         product,
         presentation,
         unitFactor,
@@ -311,11 +367,16 @@ export class CompleteSale {
     }
 
     // 5. Stock & FEFO Lot Allocation (Guaranteed non-negative, multi-movement)
-    // Group required base units by productId
-    const requiredByProduct = new Map<string, { totalBaseQuantity: number; productName: string }>();
+    // Group required base units by productId (ignoring OPEN_AMOUNT)
+    const requiredByProduct = new Map<string, { totalBaseQuantity: number; productName: string; isWeight: boolean }>();
     for (const v of validatedItems) {
-      const baseQty = v.inputItem.quantity * v.unitFactor;
-      const current = requiredByProduct.get(v.product.id) || { totalBaseQuantity: 0, productName: v.product.name };
+      if (v.isOpenAmount || !v.product) continue;
+      const baseQty = v.isWeight ? (v.inputItem.weightGrams ?? v.inputItem.quantity) : (v.inputItem.quantity * v.unitFactor);
+      const current = requiredByProduct.get(v.product.id) || {
+        totalBaseQuantity: 0,
+        productName: v.product.name,
+        isWeight: v.isWeight,
+      };
       current.totalBaseQuantity += baseQty;
       requiredByProduct.set(v.product.id, current);
     }
@@ -327,9 +388,11 @@ export class CompleteSale {
       const totalAvailable = await this.movementRepo.getCurrentStock(productId, input.businessId);
 
       if (totalAvailable < req.totalBaseQuantity) {
+        const availableText = req.isWeight ? formatWeightDisplay(totalAvailable) : formatQuantity(totalAvailable, 'UNIT');
+        const requiredText = req.isWeight ? formatWeightDisplay(req.totalBaseQuantity) : formatQuantity(req.totalBaseQuantity, 'UNIT');
         return {
           success: false,
-          error: `Stock insuficiente para "${req.productName}": disponible ${formatQuantity(totalAvailable, 'UNIT')}, requerido ${formatQuantity(req.totalBaseQuantity, 'UNIT')}`,
+          error: `Stock insuficiente para "${req.productName}": disponible ${availableText}, requerido ${requiredText}`,
           errorType: 'INSUFFICIENT_STOCK',
         };
       }
@@ -355,7 +418,7 @@ export class CompleteSale {
 
       // Query cost for movement record
       const prodMovements = await this.movementRepo.listByProduct(productId, input.businessId);
-      const matchedProd = validatedItems.find((v) => v.product.id === productId)?.product;
+      const matchedProd = validatedItems.find((v) => v.product?.id === productId)?.product;
       const costState = calculateSequentialWAC(prodMovements, matchedProd?.costPrice);
 
       // Generate atomic inventory movements for each allocated chunk
@@ -412,19 +475,32 @@ export class CompleteSale {
     const saleItems: SaleItem[] = validatedItems.map((v, idx) => {
       const discount = distributedDiscounts.get(`item_${idx}`) || 0;
       const lineTotal = v.grossLineTotal - discount;
-      const inventoryQuantityDelta = -(v.inputItem.quantity * v.unitFactor);
+
+      let inventoryQuantityDelta = 0;
+      if (!v.isOpenAmount && v.product) {
+        if (v.isWeight) {
+          inventoryQuantityDelta = -(v.inputItem.weightGrams ?? v.inputItem.quantity);
+        } else {
+          inventoryQuantityDelta = -(v.inputItem.quantity * v.unitFactor);
+        }
+      }
 
       return {
         id: generateUuid(),
         businessId: input.businessId,
         saleId,
-        productId: v.product.id,
+        productId: v.isOpenAmount ? null : v.product!.id,
         presentationId: v.presentation?.id || null,
-        productNameSnapshot: v.product.name,
+        productNameSnapshot: v.isOpenAmount
+          ? (v.inputItem.customDescription?.trim() || 'Monto libre')
+          : v.product!.name,
         presentationNameSnapshot: v.presentation?.name || null,
-        baseUnit: v.product.baseUnit,
+        baseUnit: v.isOpenAmount ? 'UNIT' : v.product!.baseUnit,
         presentationFactor: v.unitFactor,
-        quantity: v.inputItem.quantity,
+        lineType: v.isOpenAmount ? 'OPEN_AMOUNT' : 'PRODUCT',
+        saleMode: v.isWeight ? 'WEIGHT' : 'UNIT',
+        weightGrams: v.isWeight ? (v.inputItem.weightGrams ?? v.inputItem.quantity) : null,
+        quantity: v.isOpenAmount ? 1000 : v.inputItem.quantity,
         inventoryQuantityDelta,
         unitPrice: v.officialUnitPrice,
         discountTotal: discount,
@@ -432,8 +508,8 @@ export class CompleteSale {
         unitCostSnapshot: v.unitCostSnapshot || null,
         lineCostTotal: v.unitCostSnapshot ? Math.floor((Math.abs(inventoryQuantityDelta) * v.unitCostSnapshot + 500) / 1000) : null,
         costQualitySnapshot: v.costQuality,
-        skuSnapshot: v.presentation?.sku || v.product.sku || null,
-        barcodeSnapshot: v.presentation?.barcode || v.product.barcode || null,
+        skuSnapshot: v.presentation?.sku || v.product?.sku || null,
+        barcodeSnapshot: v.presentation?.barcode || v.product?.barcode || null,
         createdAt: now,
       };
     });

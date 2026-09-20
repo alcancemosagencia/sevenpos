@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useCart } from '../context/CartContext';
+import { useCart, CartLine } from '../context/CartContext';
 import { useCountry } from '../../../context/CountryContext';
 import { formatMoney } from '../../../domain/common/money/Money';
 import { CurrencyCode } from '../../../types/country';
@@ -8,6 +8,8 @@ import { PosDiscountModal } from './PosDiscountModal';
 import { PosClearCartConfirmModal } from './PosClearCartConfirmModal';
 import { PosCustomerSelectorModal } from './PosCustomerSelectorModal';
 import { PosQuickCreateCustomerModal } from './PosQuickCreateCustomerModal';
+import { OpenAmountModal } from './OpenAmountModal';
+import { WeightedProductModal } from './WeightedProductModal';
 import { Button } from '../../../components/ui/Button';
 import {
   ShoppingCart,
@@ -18,6 +20,7 @@ import {
   Lock,
   ChevronDown,
   X,
+  Calculator,
 } from 'lucide-react';
 
 interface PosCartPanelProps {
@@ -49,6 +52,8 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
     setGlobalDiscount,
     incrementQuantity,
     decrementQuantity,
+    updateWeightedGrams,
+    addOpenAmountItem,
     removeItem,
     clearCart,
   } = useCart();
@@ -58,6 +63,8 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
   const [isNoteInputOpen, setIsNoteInputOpen] = useState(false);
   const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [isOpenAmountModalOpen, setIsOpenAmountModalOpen] = useState(false);
+  const [editingWeightedLine, setEditingWeightedLine] = useState<CartLine | null>(null);
 
   const hasItems = items.length > 0;
 
@@ -123,6 +130,16 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
             <p className="text-xs text-text-tertiary mt-1">
               Seleccione productos del catálogo para agregarlos a la venta actual.
             </p>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => setIsOpenAmountModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-secondary hover:bg-surface-tertiary border border-border-default text-xs font-semibold text-text-primary transition-colors cursor-pointer"
+              >
+                <Calculator size={13} className="text-brand-primary" />
+                <span>+ Monto libre / Calculadora</span>
+              </button>
+            </div>
           </div>
         ) : (
           items.map((line) => (
@@ -133,6 +150,7 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
               onIncrement={() => incrementQuantity(line.lineId)}
               onDecrement={() => decrementQuantity(line.lineId)}
               onRemove={() => removeItem(line.lineId)}
+              onEditWeight={(_id, item) => setEditingWeightedLine(item)}
             />
           ))
         )}
@@ -174,8 +192,17 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
             </div>
           )}
 
-          {/* Additional controls: Add Discount / Add Note */}
-          <div className="flex items-center gap-2 pt-1">
+          {/* Additional controls: Add Discount / Add Note / Add Open Amount */}
+          <div className="flex items-center gap-2 pt-1 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsOpenAmountModalOpen(true)}
+              className="text-[11px] font-medium px-2 py-1 rounded-lg border border-border-default bg-surface text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Calculator size={12} />
+              + Monto libre
+            </button>
+
             <button
               type="button"
               onClick={() => setIsDiscountModalOpen(true)}
@@ -311,6 +338,43 @@ export const PosCartPanel: React.FC<PosCartPanelProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Open Amount Modal */}
+      <OpenAmountModal
+        isOpen={isOpenAmountModalOpen}
+        currency={currency}
+        onClose={() => setIsOpenAmountModalOpen(false)}
+        onConfirm={(amount, desc) => {
+          addOpenAmountItem(amount, desc);
+        }}
+      />
+
+      {/* Edit Weighted Item Modal */}
+      {editingWeightedLine && (
+        <WeightedProductModal
+          isOpen={Boolean(editingWeightedLine)}
+          product={{
+            id: editingWeightedLine.productId || 'temp',
+            businessId: 'primary-business',
+            categoryId: null,
+            name: editingWeightedLine.productName,
+            baseUnit: 'KG',
+            salePrice: editingWeightedLine.unitPrice,
+            saleMode: 'WEIGHT',
+            featured: false,
+            active: true,
+            createdAt: '',
+            updatedAt: '',
+          }}
+          initialWeightGrams={editingWeightedLine.weightGrams || editingWeightedLine.quantity}
+          currency={currency}
+          onClose={() => setEditingWeightedLine(null)}
+          onConfirm={(_prod, newWeightGrams) => {
+            updateWeightedGrams(editingWeightedLine.lineId, newWeightGrams);
+            setEditingWeightedLine(null);
+          }}
+        />
       )}
     </div>
   );
