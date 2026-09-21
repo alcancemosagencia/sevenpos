@@ -98,6 +98,8 @@ const mockAuthContextValue = (overrides?: Partial<AuthContextType>): AuthContext
   signUpWithEmail: vi.fn(),
   setupCloudBusiness: vi.fn(),
   checkEmailVerified: vi.fn(),
+  verifyEmailOtp: vi.fn(),
+  updatePendingVerificationEmail: vi.fn(),
   resendVerificationEmail: vi.fn(),
   sendPasswordReset: vi.fn(),
   enrollDevice: vi.fn(),

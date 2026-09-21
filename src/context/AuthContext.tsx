@@ -65,6 +65,8 @@ export interface AuthContextType {
   signUpWithEmail: (params: SignUpParams & { businessName: string; countryCode: string }) => Promise<{ success: boolean; requiresEmailVerification?: boolean; error?: string }>;
   setupCloudBusiness: (params: { businessName: string; countryCode: string }) => Promise<{ success: boolean; error?: string }>;
   checkEmailVerified: () => Promise<boolean>;
+  verifyEmailOtp: (otp: string) => Promise<{ success: boolean; error?: string }>;
+  updatePendingVerificationEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
   resendVerificationEmail: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   enrollDevice: (params: { deviceName: string; platform: string; deviceType: DeviceType }) => Promise<{ success: boolean; error?: string }>;
@@ -220,8 +222,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         hydrateCloudSessionSilently();
       }
 
+      const initialPath = typeof window !== 'undefined'
+        ? window.location.pathname.split('?')[0].replace(/\/+$/, '') || '/'
+        : '';
+
       // State Machine Resolution:
-      if (localEnrollment) {
+      if (initialPath === '/register' && result.sessionStatus !== 'unlocked') {
+        setAuthMachineState('REGISTER_REQUIRED');
+      } else if (localEnrollment) {
         // Enrolled device: check local session status
         if (result.sessionStatus === 'unlocked') {
           setAuthMachineState('DEVICE_UNLOCKED');
@@ -315,7 +323,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
           hydrateCloudSessionSilently();
         }
 
-        if (localEnrollment) {
+        const initialPath = typeof window !== 'undefined'
+          ? window.location.pathname.split('?')[0].replace(/\/+$/, '') || '/'
+          : '';
+
+        if (initialPath === '/register' && result.sessionStatus !== 'unlocked') {
+          setAuthMachineState('REGISTER_REQUIRED');
+        } else if (localEnrollment) {
           if (result.sessionStatus === 'unlocked') {
             setAuthMachineState('DEVICE_UNLOCKED');
           } else {
@@ -636,7 +650,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     }
   };
 
+  // Verify Email OTP
+  const verifyEmailOtp = async (token: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cloudService = getCloudService();
+      const user = await cloudService.verifyEmailOtp(pendingEmailForVerification, token, 'signup');
+      setCloudUser(user);
+
+      const memberships = await cloudService.getMemberships();
+      const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
+
+      if (ownerMembership) {
+        setCloudMembership(ownerMembership);
+        setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+      } else if (pendingDraftBusinessName) {
+        // Auto-bootstrap using draft provided at signup
+        const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
+          firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
+          lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
+          businessName: pendingDraftBusinessName,
+          countryCode: pendingDraftCountryCode,
+        });
+
+        setCloudMembership({
+          businessId: bootstrapRes.businessId,
+          businessName: bootstrapRes.businessName,
+          countryCode: bootstrapRes.countryCode,
+          role: bootstrapRes.role,
+          status: 'ACTIVE',
+        });
+
+        setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+      } else {
+        // Prompt user to name their business
+        setAuthMachineState('BUSINESS_SETUP_REQUIRED');
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error verifying email OTP:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Error al verificar el código.',
+      };
+    }
+  };
+
+  // Update pending verification email (e.g. typo correction)
+  const updatePendingVerificationEmail = async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const trimmed = newEmail.trim();
+      setPendingEmailForVerification(trimmed);
+      const cloudService = getCloudService();
+      await cloudService.resendVerificationEmail(trimmed);
+      return { success: true };
+    } catch (err: unknown) {
+      console.error('Error updating pending verification email:', err);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Error al reenviar el código al nuevo correo.',
+      };
+    }
+  };
+
   const resendVerificationEmail = async (): Promise<void> => {
+
     const cloudService = getCloudService();
     if (pendingEmailForVerification) {
       await cloudService.resendVerificationEmail(pendingEmailForVerification);
@@ -1240,6 +1318,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         signUpWithEmail,
         setupCloudBusiness,
         checkEmailVerified,
+        verifyEmailOtp,
+        updatePendingVerificationEmail,
         resendVerificationEmail,
         sendPasswordReset,
         enrollDevice,

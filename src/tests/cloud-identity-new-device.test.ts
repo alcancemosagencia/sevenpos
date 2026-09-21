@@ -82,6 +82,11 @@ class MockCloudAuthService implements CloudAuthService {
     return dev;
   }
 
+  async verifyEmailOtp(email: string): Promise<CloudUser> {
+    this.mockUser = { id: 'usr-phone-1', email, emailConfirmed: true };
+    return this.mockUser;
+  }
+
   async getDevice(deviceId: string): Promise<CloudDeviceRecord | null> {
     return this.enrolledDevices.find((d) => d.id === deviceId) || null;
   }

@@ -79,22 +79,68 @@ export class SupabaseAuthService implements CloudAuthService {
     await this.client.auth.signOut();
   }
 
+  async verifyEmailOtp(
+    email: string,
+    token: string,
+    type: 'signup' | 'recovery' | 'email_change' | 'email' = 'signup'
+  ): Promise<CloudUser> {
+    const cleanToken = token.trim();
+    const cleanEmail = email.trim();
+
+    const { data, error } = await this.client.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type,
+    });
+
+    if (error) {
+      const lower = (error.message || '').toLowerCase();
+      if (lower.includes('expired') || lower.includes('vencid')) {
+        throw new Error('Este código ya venció. Solicita uno nuevo.');
+      }
+      if (lower.includes('invalid') || lower.includes('token') || lower.includes('otp') || lower.includes('incorrect')) {
+        throw new Error('Código incorrecto. Revisa los números e inténtalo nuevamente.');
+      }
+      if (lower.includes('rate') || lower.includes('security') || lower.includes('too many') || lower.includes('once every')) {
+        throw new Error('Demasiados intentos. Espera unos minutos antes de intentar de nuevo.');
+      }
+      throw new Error(error.message || 'Error al verificar el código de confirmación.');
+    }
+
+    if (!data.user) {
+      throw new Error('No se pudo verificar la cuenta. Inténtalo de nuevo.');
+    }
+
+    return {
+      id: data.user.id,
+      email: data.user.email || cleanEmail,
+      emailConfirmed: !!data.user.email_confirmed_at,
+    };
+  }
+
   async resendVerificationEmail(email: string): Promise<void> {
     const { error } = await this.client.auth.resend({
       type: 'signup',
       email: email.trim(),
     });
     if (error) {
-      throw error;
+      const lower = (error.message || '').toLowerCase();
+      if (lower.includes('rate') || lower.includes('security') || lower.includes('too many') || lower.includes('once every')) {
+        throw new Error('Por favor espera antes de solicitar un nuevo código de verificación.');
+      }
+      throw new Error(error.message || 'Error al reenviar el correo de verificación.');
     }
   }
 
   async sendPasswordReset(email: string): Promise<void> {
-    const { error } = await this.client.auth.resetPasswordForEmail(email.trim());
+    const { error } = await this.client.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: 'https://sevenpos.pro/auth/reset-password',
+    });
     if (error) {
       throw error;
     }
   }
+
 
   async checkEmailVerified(): Promise<boolean> {
     const { data, error } = await this.client.auth.getUser();

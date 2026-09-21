@@ -113,6 +113,17 @@ class MockInstrumentedCloudAuthService implements CloudAuthService {
     return dev;
   }
 
+  async verifyEmailOtp(email: string, token: string): Promise<CloudUser> {
+    if (token === '000000' || token === 'expired') {
+      throw new Error('Este código ya venció. Solicita uno nuevo.');
+    }
+    if (token === '111111' || token === 'invalid') {
+      throw new Error('Código incorrecto. Revisa los números e inténtalo nuevamente.');
+    }
+    this.mockUser = { id: 'usr-signup-1', email, emailConfirmed: true };
+    return this.mockUser;
+  }
+
   async getDevice(deviceId: string): Promise<CloudDeviceRecord | null> {
     return this.enrolledDevices.find((d) => d.id === deviceId) || null;
   }

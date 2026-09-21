@@ -22,7 +22,12 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
-  const [isResetMode, setIsResetMode] = useState(false);
+  const [isResetMode, setIsResetMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname.includes('reset-password');
+    }
+    return false;
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

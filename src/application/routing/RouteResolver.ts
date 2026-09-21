@@ -5,6 +5,8 @@ export type AppRoute =
   | '/verify-email'
   | '/setup-business'
   | '/enroll-device'
+  | '/auth/reset-password'
+  | '/auth/callback'
   | '/dashboard'
   | '/pos'
   | '/sales'
@@ -101,18 +103,34 @@ export function normalizeProtectedPath(rawPath?: string | null): AppRoute | null
  *
  * Invariants:
  * 1. !isHydrated -> 'loading'
- * 2. Explicit authMachineState takes priority when provided (Cloud Identity).
- * 3. isCompletionCelebrationActive === true -> '/register'
- * 4. onboardingStatus === 'incomplete' -> '/register' (legacy local test harness)
- * 5. sessionStatus === 'locked' -> '/login'
- * 6. sessionStatus === 'unlocked' -> requested protected route or '/dashboard'
+ * 2. Public auth routes (/register, /auth/reset-password, /auth/callback) take precedence when not operating in unlocked state.
+ * 3. Explicit authMachineState takes priority when provided (Cloud Identity).
+ * 4. isCompletionCelebrationActive === true -> '/register'
+ * 5. onboardingStatus === 'incomplete' -> '/register' (legacy local test harness)
+ * 6. sessionStatus === 'locked' -> '/login'
+ * 7. sessionStatus === 'unlocked' -> requested protected route or '/dashboard'
  */
 export function resolveEntryRoute(state: RouteResolutionState): AppRoute {
   if (!state.isHydrated) {
     return 'loading';
   }
 
-  // 1. Explicit Auth Machine State (Cloud Identity) takes priority if provided
+  const cleanRequested = state.requestedPath?.split('?')[0].replace(/\/+$/, '') || '';
+
+  // 1. Direct Public Auth URLs take precedence before session redirects if not unlocked
+  if (state.authMachineState !== 'DEVICE_UNLOCKED' && state.sessionStatus !== 'unlocked') {
+    if (cleanRequested === '/register') {
+      return '/register';
+    }
+    if (cleanRequested === '/auth/reset-password') {
+      return '/auth/reset-password';
+    }
+    if (cleanRequested === '/auth/callback') {
+      return '/auth/callback';
+    }
+  }
+
+  // 2. Explicit Auth Machine State (Cloud Identity) takes priority if provided
   if (state.authMachineState) {
     switch (state.authMachineState) {
       case 'REGISTER_REQUIRED':

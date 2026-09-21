@@ -201,6 +201,8 @@ const AppRoot: React.FC = () => {
     signUpWithEmail,
     setupCloudBusiness,
     checkEmailVerified,
+    verifyEmailOtp,
+    updatePendingVerificationEmail,
     resendVerificationEmail,
     sendPasswordReset,
     enrollDevice,
@@ -470,8 +472,10 @@ const AppRoot: React.FC = () => {
       <>
         <VerifyEmailPage
           email={pendingEmailForVerification}
+          onVerifyOtp={verifyEmailOtp}
           onCheckVerification={checkEmailVerified}
           onResendEmail={resendVerificationEmail}
+          onUpdateEmail={updatePendingVerificationEmail}
           onBackToLogin={goToAccountLogin}
         />
         {renderDevTools()}

@@ -56,6 +56,8 @@ function createMockAuthContext(overrides?: Partial<AuthContextType>): AuthContex
     signUpWithEmail: vi.fn(),
     setupCloudBusiness: vi.fn(),
     checkEmailVerified: vi.fn(),
+    verifyEmailOtp: vi.fn(),
+    updatePendingVerificationEmail: vi.fn(),
     resendVerificationEmail: vi.fn(),
     sendPasswordReset: vi.fn(),
     enrollDevice: vi.fn(),

@@ -66,5 +66,7 @@ export interface CloudAuthService {
     platform: string;
     deviceType: DeviceType;
   }): Promise<CloudDeviceRecord>;
+  verifyEmailOtp(email: string, token: string, type?: 'signup' | 'recovery' | 'email_change' | 'email'): Promise<CloudUser>;
   getDevice(deviceId: string): Promise<CloudDeviceRecord | null>;
 }
+
