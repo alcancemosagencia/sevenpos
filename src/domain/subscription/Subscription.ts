@@ -7,11 +7,22 @@ import { PlanCode } from './Plan';
 export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED';
 export type SubscriptionSource = 'LOCAL_FALLBACK' | 'CLOUD';
 
+export type SubscriptionResolutionReason =
+  | 'CONFIRMED_PRO'
+  | 'CONFIRMED_FREE'
+  | 'LOAD_ERROR'
+  | 'NO_CLOUD_LINK'
+  | 'OFFLINE_UNAVAILABLE'
+  | 'INVALID_UUID'
+  | 'RLS_DENIED';
+
 export interface Subscription {
   businessId: string;
   plan: PlanCode;
   status: SubscriptionStatus;
   source: SubscriptionSource;
+  resolutionReason?: SubscriptionResolutionReason;
+  errorMessage?: string;
   /** ISO 8601 timestamp of last known update */
   updatedAt: string;
   /** True if cancel has been requested; Pro remains until periodEnd */

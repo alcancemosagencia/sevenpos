@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { OnboardingState, OnboardingStatus, SessionStatus } from '../types/onboarding';
 import { SupportedCountryCode } from '../types/country';
+import { COUNTRY_PROFILES } from '../config/countries';
 import { useCountry } from './CountryContext';
 import { BootApplication, BootStatus } from '../application/boot/BootApplication';
 import { CompleteInitialSetup } from '../application/onboarding/CompleteInitialSetup';
@@ -150,15 +151,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       if (user && user.emailConfirmed) {
         setCloudUser(user);
         const memberships = await cloudService.getMemberships();
-        const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
-        if (ownerMembership) {
-          setCloudMembership(ownerMembership);
+        const activeMembership =
+          memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE') ||
+          memberships.find((m) => m.status === 'ACTIVE');
+        if (activeMembership) {
+          setCloudMembership(activeMembership);
+          if (activeMembership.businessId) {
+            setResolvedBusinessId((prev) => (prev && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(prev)) ? prev : activeMembership.businessId);
+          }
+          if (activeMembership.countryCode && COUNTRY_PROFILES[activeMembership.countryCode as SupportedCountryCode]) {
+            const cc = activeMembership.countryCode as SupportedCountryCode;
+            setCountryCode(cc);
+            const prof = COUNTRY_PROFILES[cc];
+            setState((prev) => ({
+              ...prev,
+              countryCode: cc,
+              business: {
+                ...prev.business,
+                name: activeMembership.businessName || prev.business.name,
+                phonePrefix: prof.phonePrefix,
+              },
+              regionalSettings: {
+                ...prev.regionalSettings,
+                primaryCurrencyCode: prof.primaryCurrency.code,
+                secondaryCurrencyCode: prof.secondaryCurrency?.code,
+                enableSecondaryUSD: cc === 'VE',
+              },
+            }));
+          }
         }
       }
     } catch {
       // Non-blocking: network offline or token expired
     }
-  }, [getCloudService]);
+  }, [getCloudService, setCountryCode]);
 
   // Main Boot Process
   const runBoot = useCallback(async () => {
@@ -216,7 +242,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       const localLink = CloudBusinessLinkStorage.getLink();
       setDeviceEnrollment(localEnrollment);
       setCloudBusinessLink(localLink);
-      setResolvedBusinessId(result.business?.id || localEnrollment?.localBusinessId || localLink?.localBusinessId || null);
+
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const candidateBusinessId =
+        (localEnrollment?.cloudBusinessId && uuidRegex.test(localEnrollment.cloudBusinessId) ? localEnrollment.cloudBusinessId : null) ||
+        (localLink?.cloudBusinessId && uuidRegex.test(localLink.cloudBusinessId) ? localLink.cloudBusinessId : null) ||
+        (result.business?.id && uuidRegex.test(result.business.id) ? result.business.id : null) ||
+        result.business?.id ||
+        localEnrollment?.localBusinessId ||
+        localLink?.localBusinessId ||
+        null;
+      setResolvedBusinessId(candidateBusinessId);
 
       if (localEnrollment || localLink) {
         hydrateCloudSessionSilently();
@@ -436,6 +472,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       }
 
       setCloudMembership(ownerMembership);
+      if (ownerMembership.businessId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ownerMembership.businessId)) {
+        setResolvedBusinessId((prev) => (prev && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(prev)) ? prev : ownerMembership.businessId);
+      }
 
       // Check if this specific physical device is already enrolled
       const currentEnrollment = DeviceEnrollmentStorage.getEnrollment();
@@ -521,10 +560,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       const cloudService = getCloudService();
 
       // Store pending business draft for post-confirmation bootstrap
+      const chosenCountry = (params.countryCode as SupportedCountryCode) || 'CL';
+      const prof = COUNTRY_PROFILES[chosenCountry] || COUNTRY_PROFILES.CL;
       setPendingDraftBusinessName(params.businessName.trim());
-      setPendingDraftCountryCode(params.countryCode || 'CL');
+      setPendingDraftCountryCode(chosenCountry);
       setPendingDraftOwnerFirstName(params.firstName.trim());
       setPendingDraftOwnerLastName(params.lastName ? params.lastName.trim() : '');
+
+      setCountryCode(chosenCountry);
+      setState((prev) => ({
+        ...prev,
+        countryCode: chosenCountry,
+        business: {
+          ...prev.business,
+          name: params.businessName.trim(),
+          phonePrefix: prof.phonePrefix,
+        },
+        regionalSettings: {
+          ...prev.regionalSettings,
+          primaryCurrencyCode: prof.primaryCurrency.code,
+          secondaryCurrencyCode: prof.secondaryCurrency?.code,
+          enableSecondaryUSD: chosenCountry === 'VE',
+        },
+        owner: {
+          ...prev.owner,
+          firstName: params.firstName.trim(),
+          lastName: params.lastName ? params.lastName.trim() : '',
+          email: params.email.trim(),
+        },
+      }));
 
       const { user, requiresEmailVerification } = await cloudService.signUp({
         email: params.email,
@@ -546,7 +610,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         firstName: params.firstName,
         lastName: params.lastName,
         businessName: params.businessName,
-        countryCode: params.countryCode,
+        countryCode: chosenCountry,
       });
 
       setCloudMembership({
@@ -578,11 +642,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         return { success: false, error: 'Sesión no válida. Inicia sesión nuevamente.' };
       }
 
+      const chosenCountry = (params.countryCode as SupportedCountryCode) || 'CL';
+      const prof = COUNTRY_PROFILES[chosenCountry] || COUNTRY_PROFILES.CL;
+      setCountryCode(chosenCountry);
+      setState((prev) => ({
+        ...prev,
+        countryCode: chosenCountry,
+        business: {
+          ...prev.business,
+          name: params.businessName.trim(),
+          phonePrefix: prof.phonePrefix,
+        },
+        regionalSettings: {
+          ...prev.regionalSettings,
+          primaryCurrencyCode: prof.primaryCurrency.code,
+          secondaryCurrencyCode: prof.secondaryCurrency?.code,
+          enableSecondaryUSD: chosenCountry === 'VE',
+        },
+      }));
+
       const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
         firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
         lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
         businessName: params.businessName.trim(),
-        countryCode: params.countryCode || 'CL',
+        countryCode: chosenCountry,
       });
 
       const membership: CloudBusinessMembership = {
@@ -824,19 +907,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         let businessId = business?.id;
         if (!businessId) {
           businessId = 'biz-local-generated';
+          const effectiveCountry = (cloudMembership?.countryCode as SupportedCountryCode) ||
+            (state.countryCode as SupportedCountryCode) || 'CL';
+          const prof = COUNTRY_PROFILES[effectiveCountry] || COUNTRY_PROFILES.CL;
           await businessRepo.saveBusinessWithSettings(
             {
               id: businessId,
-              name: deviceEnrollment?.businessName || state.business.name || 'Mi Negocio',
-              countryCode: (state.countryCode as SupportedCountryCode) || 'CL',
-              phonePrefix: '+56',
+              name: deviceEnrollment?.businessName || cloudMembership?.businessName || state.business.name || 'Mi Negocio',
+              countryCode: effectiveCountry,
+              phonePrefix: prof.phonePrefix,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
             {
               businessId,
-              primaryCurrency: (state.regionalSettings.primaryCurrencyCode as import('../types/country').CurrencyCode) || 'CLP',
-              secondaryCurrencyEnabled: false,
+              primaryCurrency: prof.primaryCurrency.code as import('../types/country').CurrencyCode,
+              secondaryCurrency: (prof.secondaryCurrency?.code as import('../types/country').CurrencyCode) || null,
+              secondaryCurrencyEnabled: effectiveCountry === 'VE',
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             }

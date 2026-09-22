@@ -26,6 +26,19 @@ import { ScannerSimulatorModal } from '../components/dev/ScannerSimulatorModal';
 import { syncBrowserUrl, normalizeProtectedPath, resolveEntryRoute, AppRoute } from '../application/routing/RouteResolver';
 import { Activity, WifiOff, AlertTriangle, RotateCcw, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { PlatformApp } from '../platform/PlatformApp';
+
+export function isPlatformHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const hostname = window.location.hostname.toLowerCase();
+  const pathname = window.location.pathname.toLowerCase();
+  return (
+    hostname.startsWith('platform.') ||
+    hostname === 'platform.sevenpos.pro' ||
+    pathname.startsWith('/platform') ||
+    window.location.search.includes('__platform=1')
+  );
+}
 
 import { ProductsListPage } from '../pages/ProductsListPage';
 import { ProductFormPage } from '../pages/ProductFormPage';
@@ -973,6 +986,14 @@ const AppRoot: React.FC = () => {
 };
 
 export const App: React.FC = () => {
+  if (isPlatformHost()) {
+    return (
+      <ErrorBoundary>
+        <PlatformApp />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <ThemeProvider>

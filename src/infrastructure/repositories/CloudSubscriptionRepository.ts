@@ -2,6 +2,10 @@ import { ISubscriptionRepository } from '../../domain/subscription/SubscriptionR
 import { Subscription } from '../../domain/subscription/Subscription';
 import { PlanCode } from '../../domain/subscription/Plan';
 import { getSupabaseClient } from '../cloud/supabaseClient';
+import { DeviceEnrollmentStorage } from '../auth/DeviceEnrollmentStorage';
+import { CloudBusinessLinkStorage } from '../auth/CloudBusinessLinkStorage';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * CloudSubscriptionRepository — reads subscription state from Supabase.
@@ -12,17 +16,69 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
   async getSubscription(businessId: string): Promise<Subscription> {
     try {
       const supabase = getSupabaseClient();
+      let targetBusinessId = businessId;
+
+      // If businessId is not a valid UUID, attempt resolution from storage or active membership
+      if (!targetBusinessId || !UUID_REGEX.test(targetBusinessId)) {
+        const enrollment = DeviceEnrollmentStorage.getEnrollment();
+        const link = CloudBusinessLinkStorage.getLink();
+        if (enrollment?.cloudBusinessId && UUID_REGEX.test(enrollment.cloudBusinessId)) {
+          targetBusinessId = enrollment.cloudBusinessId;
+        } else if (link?.cloudBusinessId && UUID_REGEX.test(link.cloudBusinessId)) {
+          targetBusinessId = link.cloudBusinessId;
+        } else {
+          // Check active user session memberships via Supabase
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: membership } = await supabase
+              .from('business_memberships')
+              .select('business_id')
+              .eq('user_id', user.id)
+              .eq('status', 'ACTIVE')
+              .order('created_at', { ascending: true })
+              .limit(1)
+              .maybeSingle();
+
+            if (membership?.business_id && UUID_REGEX.test(membership.business_id)) {
+              targetBusinessId = membership.business_id;
+            }
+          }
+        }
+      }
+
+      // If we still don't have a valid UUID, safely return fallback
+      if (!targetBusinessId || !UUID_REGEX.test(targetBusinessId)) {
+        const hasEnrollmentOrLink = Boolean(
+          DeviceEnrollmentStorage.getEnrollment()?.cloudBusinessId ||
+          CloudBusinessLinkStorage.getLink()?.cloudBusinessId
+        );
+        return this.freeFallback(
+          businessId,
+          'LOCAL_FALLBACK',
+          hasEnrollmentOrLink ? 'INVALID_UUID' : 'NO_CLOUD_LINK',
+          hasEnrollmentOrLink ? 'No se pudo resolver un UUID cloud válido.' : 'Dispositivo sin enlace a negocio cloud.'
+        );
+      }
+
       const { data, error } = await supabase
         .from('business_subscriptions')
         .select('plan_code, status, cancel_at_period_end, current_period_end, updated_at')
-        .eq('business_id', businessId)
+        .eq('business_id', targetBusinessId)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        const isRls = error.code === '42501' || error.message?.toLowerCase().includes('permission') || error.message?.toLowerCase().includes('policy');
+        return this.freeFallback(
+          businessId,
+          'CLOUD',
+          isRls ? 'RLS_DENIED' : 'LOAD_ERROR',
+          error.message
+        );
+      }
 
       if (!data) {
-        // No subscription row → safely default to FREE
-        return this.freeFallback(businessId, 'CLOUD');
+        // No subscription row in cloud → CONFIRMED_FREE
+        return this.freeFallback(businessId, 'CLOUD', 'CONFIRMED_FREE');
       }
 
       // Map cloud status to Subscription type
@@ -34,13 +90,21 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
         plan,
         status,
         source: 'CLOUD',
+        resolutionReason: plan === 'PRO' ? 'CONFIRMED_PRO' : 'CONFIRMED_FREE',
         updatedAt: data.updated_at ?? new Date().toISOString(),
         cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
         periodEnd: data.current_period_end ?? null,
       };
     } catch (err) {
-      console.warn('[CloudSubscriptionRepository] Cloud fetch failed, falling back to FREE:', err);
-      return this.freeFallback(businessId, 'LOCAL_FALLBACK');
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[CloudSubscriptionRepository] Cloud fetch failed, falling back safely:', err);
+      return this.freeFallback(
+        businessId,
+        'LOCAL_FALLBACK',
+        isOffline ? 'OFFLINE_UNAVAILABLE' : 'LOAD_ERROR',
+        errorMsg
+      );
     }
   }
 
@@ -63,12 +127,19 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
     return 'FREE';
   }
 
-  private freeFallback(businessId: string, source: Subscription['source']): Subscription {
+  private freeFallback(
+    businessId: string,
+    source: Subscription['source'],
+    resolutionReason: Subscription['resolutionReason'] = 'CONFIRMED_FREE',
+    errorMessage?: string
+  ): Subscription {
     return {
       businessId,
       plan: 'FREE',
       status: 'ACTIVE',
       source,
+      resolutionReason,
+      errorMessage,
       updatedAt: new Date().toISOString(),
     };
   }
