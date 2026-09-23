@@ -13,6 +13,7 @@ import { repositoryFactory } from '../infrastructure/repositories/RepositoryFact
 import { GetDashboardMetrics, DashboardMetricsResult } from '../application/dashboard/GetDashboardMetrics';
 import { DashboardPeriod } from '../application/dashboard/periodDates';
 import { salesEventBus } from '../domain/sales/events/SalesEventBus';
+import { useCountry } from '../context/CountryContext';
 
 export interface DashboardPageProps {
   onNavigateToPos?: () => void;
@@ -26,6 +27,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onNavigateToReports,
 }) => {
   const businessId = 'primary-business';
+  const { countryCode } = useCountry();
   const [period, setPeriod] = useState<DashboardPeriod>('today');
   const [metrics, setMetrics] = useState<DashboardMetricsResult | null>(null);
 
@@ -38,12 +40,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
   const loadMetrics = useCallback(async () => {
     try {
-      const res = await getDashboardMetricsUseCase.execute(businessId, period);
+      const res = await getDashboardMetricsUseCase.execute(businessId, period, countryCode);
       setMetrics(res);
     } catch (err) {
       console.error('Error loading dashboard metrics:', err);
     }
-  }, [businessId, period, getDashboardMetricsUseCase]);
+  }, [businessId, period, countryCode, getDashboardMetricsUseCase]);
 
   // Load on mount and on period change
   useEffect(() => {
@@ -100,7 +102,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       />
 
       {/* 2. KPI Cards Row (4 cards) */}
-      <DashboardKPIs data={currentData.kpis} />
+      <DashboardKPIs data={{ ...currentData.kpis, profitQuality: currentData.profitQuality }} />
 
       {/* 3. Main Two-Column Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 sm:gap-4 items-stretch">

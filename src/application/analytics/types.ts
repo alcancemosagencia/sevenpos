@@ -14,6 +14,7 @@ export interface DateRange {
   fromUtc: string;   // ISO string UTC start (inclusive)
   toUtc: string;     // ISO string UTC end (inclusive end of period)
   label: string;
+  countryCode?: string;
 }
 
 export interface ComparisonPeriod {

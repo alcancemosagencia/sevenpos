@@ -505,8 +505,10 @@ export class CompleteSale {
         unitPrice: v.officialUnitPrice,
         discountTotal: discount,
         lineTotal,
-        unitCostSnapshot: v.unitCostSnapshot || null,
-        lineCostTotal: v.unitCostSnapshot ? Math.floor((Math.abs(inventoryQuantityDelta) * v.unitCostSnapshot + 500) / 1000) : null,
+        unitCostSnapshot: v.unitCostSnapshot ?? null,
+        lineCostTotal: v.unitCostSnapshot != null
+          ? Number((BigInt(Math.abs(inventoryQuantityDelta)) * BigInt(v.unitCostSnapshot) + 500n) / 1000n)
+          : null,
         costQualitySnapshot: v.costQuality,
         skuSnapshot: v.presentation?.sku || v.product?.sku || null,
         barcodeSnapshot: v.presentation?.barcode || v.product?.barcode || null,

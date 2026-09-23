@@ -6,6 +6,7 @@ import { SaleRepository, ListSalesOptions } from '../../domain/sales/repositorie
 import { DatabaseManager } from '../database/DatabaseManager';
 import { logger } from '../logging/Logger';
 import { insertAuditRowInTransaction } from '../../application/audit/auditEventHelper';
+import { aggregateSalesPeriod } from '../../domain/sales/SalesPeriodAggregation';
 
 interface SaleRow {
   id: string;
@@ -254,8 +255,8 @@ export class SqliteSaleRepository implements SaleRepository {
             item.unitPrice,
             item.discountTotal,
             item.lineTotal,
-            item.unitCostSnapshot || null,
-            item.lineCostTotal || null,
+            item.unitCostSnapshot ?? null,
+            item.lineCostTotal ?? null,
             item.costQualitySnapshot,
             item.skuSnapshot || null,
             item.barcodeSnapshot || null,
@@ -529,7 +530,7 @@ export class SqliteSaleRepository implements SaleRepository {
       return rows.map((r) => this.saleRowToEntity(r));
     } catch (err) {
       logger.error('SqliteSaleRepository', 'Error listing sales', { error: String(err) });
-      return this.fallbackRepo.listSales(businessId, options);
+      throw err;
     }
   }
 
@@ -558,54 +559,25 @@ export class SqliteSaleRepository implements SaleRepository {
     if (!db) return this.fallbackRepo.getSalesSummary(businessId, fromUtc, toUtc);
 
     try {
-      const rows = await db.select<{
-        total_sales: number;
-        ticket_count: number;
-        total_discount: number;
-        real_profit: number;
-        uncosted_count: number;
-        total_items: number;
-      }[]>(
-        `SELECT 
-          COALESCE(SUM(s.total), 0) AS total_sales,
-          COUNT(DISTINCT s.id) AS ticket_count,
-          COALESCE(SUM(s.discount_total), 0) AS total_discount,
-          COALESCE(SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' THEN (si.line_total - COALESCE(si.line_cost_total, 0)) ELSE 0 END), 0) AS real_profit,
-          COALESCE(SUM(CASE WHEN si.cost_quality_snapshot != 'REAL' THEN 1 ELSE 0 END), 0) AS uncosted_count,
-          COUNT(si.id) AS total_items
-        FROM sales s
-        LEFT JOIN sale_items si ON si.sale_id = s.id AND si.business_id = s.business_id
-        WHERE s.business_id = ? 
-          AND s.completed_at >= ? 
-          AND s.completed_at < ? 
-          AND s.status = 'COMPLETED'`,
+      const salesRows = await db.select<SaleRow[]>(
+        `SELECT * FROM sales WHERE business_id = ? AND completed_at >= ? AND completed_at <= ? AND status = 'COMPLETED'`,
         [businessId, fromUtc, toUtc]
       );
-
-      if (rows.length === 0 || rows[0].ticket_count === 0) {
-        return {
-          totalSales: 0,
-          ticketCount: 0,
-          totalDiscount: 0,
-          profitMinor: null,
-          profitQuality: 'INCOMPLETE',
-        };
-      }
-
-      const r = rows[0];
-      const profitQuality = r.uncosted_count > 0 || r.total_items === 0 ? 'INCOMPLETE' : 'COMPLETE';
-      const profitMinor = profitQuality === 'COMPLETE' ? r.real_profit : null;
-
-      return {
-        totalSales: r.total_sales,
-        ticketCount: r.ticket_count,
-        totalDiscount: r.total_discount,
-        profitMinor,
-        profitQuality,
-      };
+      const itemRows = salesRows.length > 0
+        ? await db.select<SaleItemRow[]>(
+          `SELECT si.* FROM sale_items si JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
+           WHERE s.business_id = ? AND s.completed_at >= ? AND s.completed_at <= ? AND s.status = 'COMPLETED'`,
+          [businessId, fromUtc, toUtc],
+        )
+        : [];
+      return aggregateSalesPeriod(
+        salesRows.map((row) => this.saleRowToEntity(row)),
+        itemRows.map((row) => this.itemRowToEntity(row)),
+        businessId, fromUtc, toUtc,
+      );
     } catch (err) {
       logger.error('SqliteSaleRepository', 'Error getting sales summary', { error: String(err) });
-      return this.fallbackRepo.getSalesSummary(businessId, fromUtc, toUtc);
+      throw err;
     }
   }
 
@@ -631,7 +603,7 @@ export class SqliteSaleRepository implements SaleRepository {
         FROM sales
         WHERE business_id = ? 
           AND completed_at >= ? 
-          AND completed_at < ? 
+          AND completed_at <= ?
           AND status = 'COMPLETED'
         GROUP BY strftime('%H', completed_at)
         ORDER BY hour_str ASC`,
@@ -696,7 +668,7 @@ export class SqliteSaleRepository implements SaleRepository {
         JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
         WHERE s.business_id = ? 
           AND s.completed_at >= ? 
-          AND s.completed_at < ? 
+          AND s.completed_at <= ?
           AND s.status = 'COMPLETED'
           AND si.product_id IS NOT NULL
           AND (si.line_type IS NULL OR si.line_type != 'OPEN_AMOUNT')

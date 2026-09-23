@@ -1,4 +1,5 @@
 import { DateRange, DateRangePreset, ComparisonPeriod } from './types';
+import { businessDateYmd, businessDayEndUtc, businessDayStartUtc, shiftYmd } from '../../domain/common/time/BusinessCalendar';
 
 function padZero(num: number): string {
   return String(num).padStart(2, '0');
@@ -11,24 +12,26 @@ export function formatDateToYMD(d: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function getStartOfDayUtc(ymd: string): string {
-  // Use ISO representation for database comparison: YYYY-MM-DDT00:00:00.000Z
-  return `${ymd}T00:00:00.000Z`;
+export function getStartOfDayUtc(ymd: string, countryCode?: string): string {
+  return countryCode ? businessDayStartUtc(ymd, countryCode) : `${ymd}T00:00:00.000Z`;
 }
 
-export function getEndOfDayUtc(ymd: string): string {
-  // Use ISO representation for database comparison: YYYY-MM-DDT23:59:59.999Z
-  return `${ymd}T23:59:59.999Z`;
+export function getEndOfDayUtc(ymd: string, countryCode?: string): string {
+  return countryCode ? businessDayEndUtc(ymd, countryCode) : `${ymd}T23:59:59.999Z`;
 }
 
 export function resolveDateRange(
   preset: DateRangePreset,
   customStart?: string,
   customEnd?: string,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  countryCode?: string
 ): DateRange {
   const now = new Date(referenceDate);
-  const todayYMD = formatDateToYMD(now);
+  const todayYMD = countryCode ? businessDateYmd(now, countryCode) : formatDateToYMD(now);
+  const start = (ymd: string) => getStartOfDayUtc(ymd, countryCode);
+  const end = (ymd: string) => getEndOfDayUtc(ymd, countryCode);
+  const withCountry = countryCode ? { countryCode } : {};
 
   switch (preset) {
     case 'TODAY': {
@@ -36,74 +39,71 @@ export function resolveDateRange(
         preset: 'TODAY',
         startDate: todayYMD,
         endDate: todayYMD,
-        fromUtc: getStartOfDayUtc(todayYMD),
-        toUtc: getEndOfDayUtc(todayYMD),
+        fromUtc: start(todayYMD),
+        toUtc: end(todayYMD),
         label: 'Hoy',
+        ...withCountry,
       };
     }
     case 'YESTERDAY': {
-      const y = new Date(now);
-      y.setDate(y.getDate() - 1);
-      const ymd = formatDateToYMD(y);
+      const ymd = shiftYmd(todayYMD, -1);
       return {
         preset: 'YESTERDAY',
         startDate: ymd,
         endDate: ymd,
-        fromUtc: getStartOfDayUtc(ymd),
-        toUtc: getEndOfDayUtc(ymd),
+        fromUtc: start(ymd),
+        toUtc: end(ymd),
         label: 'Ayer',
+        ...withCountry,
       };
     }
     case 'LAST_7_DAYS': {
-      const past = new Date(now);
-      past.setDate(past.getDate() - 6);
-      const startYMD = formatDateToYMD(past);
+      const startYMD = shiftYmd(todayYMD, -6);
       return {
         preset: 'LAST_7_DAYS',
         startDate: startYMD,
         endDate: todayYMD,
-        fromUtc: getStartOfDayUtc(startYMD),
-        toUtc: getEndOfDayUtc(todayYMD),
+        fromUtc: start(startYMD),
+        toUtc: end(todayYMD),
         label: 'Últimos 7 días',
+        ...withCountry,
       };
     }
     case 'LAST_30_DAYS': {
-      const past = new Date(now);
-      past.setDate(past.getDate() - 29);
-      const startYMD = formatDateToYMD(past);
+      const startYMD = shiftYmd(todayYMD, -29);
       return {
         preset: 'LAST_30_DAYS',
         startDate: startYMD,
         endDate: todayYMD,
-        fromUtc: getStartOfDayUtc(startYMD),
-        toUtc: getEndOfDayUtc(todayYMD),
+        fromUtc: start(startYMD),
+        toUtc: end(todayYMD),
         label: 'Últimos 30 días',
+        ...withCountry,
       };
     }
     case 'THIS_MONTH': {
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startYMD = formatDateToYMD(firstDay);
+      const startYMD = `${todayYMD.slice(0, 7)}-01`;
       return {
         preset: 'THIS_MONTH',
         startDate: startYMD,
         endDate: todayYMD,
-        fromUtc: getStartOfDayUtc(startYMD),
-        toUtc: getEndOfDayUtc(todayYMD),
+        fromUtc: start(startYMD),
+        toUtc: end(todayYMD),
         label: 'Este mes',
+        ...withCountry,
       };
     }
     case 'LAST_MONTH': {
-      const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-      const startYMD = formatDateToYMD(firstDayLastMonth);
-      const endYMD = formatDateToYMD(lastDayLastMonth);
+      const endYMD = shiftYmd(`${todayYMD.slice(0, 7)}-01`, -1);
+      const startYMD = `${endYMD.slice(0, 7)}-01`;
       return {
         preset: 'LAST_MONTH',
         startDate: startYMD,
         endDate: endYMD,
-        fromUtc: getStartOfDayUtc(startYMD),
-        toUtc: getEndOfDayUtc(endYMD),
+        fromUtc: start(startYMD),
+        toUtc: end(endYMD),
         label: 'Mes anterior',
+        ...withCountry,
       };
     }
     case 'CUSTOM': {
@@ -113,55 +113,46 @@ export function resolveDateRange(
         preset: 'CUSTOM',
         startDate: s,
         endDate: e,
-        fromUtc: getStartOfDayUtc(s),
-        toUtc: getEndOfDayUtc(e),
+        fromUtc: start(s),
+        toUtc: end(e),
         label: `${s} - ${e}`,
+        ...withCountry,
       };
     }
   }
 }
 
 export function resolveComparisonPeriod(range: DateRange): ComparisonPeriod {
-  const start = new Date(range.startDate + 'T00:00:00');
-  const end = new Date(range.endDate + 'T00:00:00');
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const start = new Date(`${range.startDate}T00:00:00.000Z`);
+  const end = new Date(`${range.endDate}T00:00:00.000Z`);
+  const diffDays = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
 
   if (range.preset === 'TODAY') {
-    const y = new Date(start);
-    y.setDate(y.getDate() - 1);
-    const ymd = formatDateToYMD(y);
+    const ymd = shiftYmd(range.startDate, -1);
     return {
-      fromUtc: getStartOfDayUtc(ymd),
-      toUtc: getEndOfDayUtc(ymd),
+      fromUtc: getStartOfDayUtc(ymd, range.countryCode),
+      toUtc: getEndOfDayUtc(ymd, range.countryCode),
       label: 'vs ayer',
     };
   }
 
   if (range.preset === 'THIS_MONTH') {
-    const prevMonthFirst = new Date(start.getFullYear(), start.getMonth() - 1, 1);
-    const prevMonthLast = new Date(start.getFullYear(), start.getMonth(), 0);
-    const pStartYMD = formatDateToYMD(prevMonthFirst);
-    const pEndYMD = formatDateToYMD(prevMonthLast);
+    const pEndYMD = shiftYmd(range.startDate, -1);
+    const pStartYMD = `${pEndYMD.slice(0, 7)}-01`;
     return {
-      fromUtc: getStartOfDayUtc(pStartYMD),
-      toUtc: getEndOfDayUtc(pEndYMD),
+      fromUtc: getStartOfDayUtc(pStartYMD, range.countryCode),
+      toUtc: getEndOfDayUtc(pEndYMD, range.countryCode),
       label: 'vs mes anterior',
     };
   }
 
   // Generic previous period of equal duration
-  const prevEnd = new Date(start);
-  prevEnd.setDate(prevEnd.getDate() - 1);
-  const prevStart = new Date(prevEnd);
-  prevStart.setDate(prevStart.getDate() - (diffDays - 1));
-
-  const pStartYMD = formatDateToYMD(prevStart);
-  const pEndYMD = formatDateToYMD(prevEnd);
+  const pEndYMD = shiftYmd(range.startDate, -1);
+  const pStartYMD = shiftYmd(pEndYMD, -(diffDays - 1));
 
   return {
-    fromUtc: getStartOfDayUtc(pStartYMD),
-    toUtc: getEndOfDayUtc(pEndYMD),
+    fromUtc: getStartOfDayUtc(pStartYMD, range.countryCode),
+    toUtc: getEndOfDayUtc(pEndYMD, range.countryCode),
     label: `vs período anterior (${diffDays}d)`,
   };
 }

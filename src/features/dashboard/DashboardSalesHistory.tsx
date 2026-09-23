@@ -50,24 +50,26 @@ export const DashboardSalesHistory: React.FC<DashboardSalesHistoryProps> = ({ da
           <div className="w-full h-full flex flex-col justify-end pt-2">
             <div className="grid grid-cols-7 gap-2 items-end h-44 pb-2 border-b border-border-subtle">
               {data.map((point, index) => {
-                const salesHeight = Math.max((point.sales / maxSale) * 100, 8);
-                const profitHeight = Math.max((point.profit / maxSale) * 100, 5);
+                const salesHeight = point.sales > 0 ? Math.max((point.sales / maxSale) * 100, 8) : 0;
+                const profitHeight = point.profit !== null && point.profit > 0
+                  ? Math.max((point.profit / maxSale) * 100, 5)
+                  : 0;
 
                 return (
                   <div key={index} className="flex flex-col items-center gap-1.5 h-full justify-end group">
                     <div className="w-full flex items-end justify-center gap-1 h-full px-1">
                       {/* Ventas Bar */}
-                      <div
+                      {point.sales > 0 && <div
                         style={{ height: `${salesHeight}%` }}
                         className="w-full max-w-[14px] bg-emerald-500 rounded-t-xs transition-all duration-300 group-hover:bg-emerald-400"
                         title={`Ventas ${point.hour}: ${formatMoney(point.sales)}`}
-                      />
+                      />}
                       {/* Ganancia Bar */}
-                      <div
+                      {point.profit !== null && point.profit > 0 && <div
                         style={{ height: `${profitHeight}%` }}
                         className="w-full max-w-[14px] bg-brand-primary rounded-t-xs transition-all duration-300 group-hover:bg-brand-primary-hover"
                         title={`Ganancia ${point.hour}: ${formatMoney(point.profit)}`}
-                      />
+                      />}
                     </div>
                     <span className="text-[10px] font-medium text-text-tertiary">
                       {point.hour}

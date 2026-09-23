@@ -20,7 +20,7 @@ export interface TopProductItem {
 export interface HourlySalesPoint {
   hour: string;
   sales: number;
-  profit: number;
+  profit: number | null;
 }
 
 export interface DashboardData {

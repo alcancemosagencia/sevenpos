@@ -3,6 +3,7 @@ import { SaleItem } from '../../domain/sales/SaleItem';
 import { SalePayment } from '../../domain/sales/SalePayment';
 import { InventoryMovement } from '../../domain/inventory/InventoryMovement';
 import { SaleRepository, ListSalesOptions } from '../../domain/sales/repositories/SaleRepository';
+import { aggregateSalesPeriod } from '../../domain/sales/SalesPeriodAggregation';
 import { InventoryMovementRepository } from '../../domain/inventory/repositories/InventoryMovementRepository';
 
 const DEV_STORAGE_KEY_SALES = 'sevenpos-dev-sales';
@@ -178,43 +179,7 @@ export class InMemorySaleRepository implements SaleRepository {
     fromUtc: string,
     toUtc: string
   ): Promise<import('../../domain/sales/repositories/SaleRepository').SalesPeriodSummary> {
-    const periodSales = this.sales.filter(
-      (s) =>
-        s.businessId === businessId &&
-        s.status === 'COMPLETED' &&
-        s.completedAt >= fromUtc &&
-        s.completedAt < toUtc
-    );
-
-    const totalSales = periodSales.reduce((acc, s) => acc + s.total, 0);
-    const totalDiscount = periodSales.reduce((acc, s) => acc + s.discountTotal, 0);
-    const ticketCount = periodSales.length;
-
-    const saleIds = new Set(periodSales.map((s) => s.id));
-    const periodItems = this.items.filter((i) => saleIds.has(i.saleId));
-
-    let hasUncosted = false;
-    let realProfit = 0;
-
-    for (const item of periodItems) {
-      if (item.costQualitySnapshot === 'REAL') {
-        const cost = item.lineCostTotal != null ? item.lineCostTotal : 0;
-        realProfit += item.lineTotal - cost;
-      } else {
-        hasUncosted = true;
-      }
-    }
-
-    const profitQuality = hasUncosted || periodItems.length === 0 ? 'INCOMPLETE' : 'COMPLETE';
-    const profitMinor = profitQuality === 'COMPLETE' ? realProfit : null;
-
-    return {
-      totalSales,
-      ticketCount,
-      totalDiscount,
-      profitMinor,
-      profitQuality,
-    };
+    return aggregateSalesPeriod(this.sales, this.items, businessId, fromUtc, toUtc);
   }
 
   async getHourlySales(
@@ -227,7 +192,7 @@ export class InMemorySaleRepository implements SaleRepository {
         s.businessId === businessId &&
         s.status === 'COMPLETED' &&
         s.completedAt >= fromUtc &&
-        s.completedAt < toUtc
+        s.completedAt <= toUtc
     );
 
     const hourMap = new Map<number, { total: number; count: number }>();
@@ -268,7 +233,7 @@ export class InMemorySaleRepository implements SaleRepository {
         s.businessId === businessId &&
         s.status === 'COMPLETED' &&
         s.completedAt >= fromUtc &&
-        s.completedAt < toUtc
+        s.completedAt <= toUtc
     );
 
     const saleIds = new Set(periodSales.map((s) => s.id));

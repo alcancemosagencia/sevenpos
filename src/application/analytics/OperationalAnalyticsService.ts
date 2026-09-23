@@ -18,6 +18,10 @@ import {
   CashSessionAuditRow,
 } from './types';
 import { resolveComparisonPeriod, calculateDelta } from './DateRangeUtils';
+import { COUNTRY_PROFILES } from '../../config/countries';
+import { CurrencyCode, SupportedCountryCode } from '../../types/country';
+import { toMajorUnits } from '../../domain/common/money/Money';
+import { businessDateYmd, shiftYmd } from '../../domain/common/time/BusinessCalendar';
 
 export class OperationalAnalyticsService {
   constructor(
@@ -36,8 +40,8 @@ export class OperationalAnalyticsService {
     const prevSalesStats = await this.getSalesTotalsAndCostCoverage(businessId, comparison.fromUtc, comparison.toUtc);
 
     // Expenses
-    const currentExpenses = await this.getOperatingExpensesTotal(businessId, range.fromUtc, range.toUtc);
-    const prevExpenses = await this.getOperatingExpensesTotal(businessId, comparison.fromUtc, comparison.toUtc);
+    const currentExpenses = await this.getOperatingExpensesTotal(businessId, range.fromUtc, range.toUtc, range.countryCode);
+    const prevExpenses = await this.getOperatingExpensesTotal(businessId, comparison.fromUtc, comparison.toUtc, range.countryCode);
 
     // Deltas
     const totalSalesDelta = calculateDelta(currentSalesStats.totalSales, prevSalesStats.totalSales);
@@ -189,7 +193,7 @@ export class OperationalAnalyticsService {
   // ---------------------------------------------------------------------------
   async getFinancialAnalytics(businessId: string, range: DateRange): Promise<FinancialAnalyticsView> {
     const salesStats = await this.getSalesTotalsAndCostCoverage(businessId, range.fromUtc, range.toUtc);
-    const expensesTotal = await this.getOperatingExpensesTotal(businessId, range.fromUtc, range.toUtc);
+    const expensesTotal = await this.getOperatingExpensesTotal(businessId, range.fromUtc, range.toUtc, range.countryCode);
     const receivedPurchasesTotal = await this.getReceivedPurchasesTotal(businessId, range.fromUtc, range.toUtc);
 
     const coverage = salesStats.costCoveragePercent;
@@ -200,8 +204,8 @@ export class OperationalAnalyticsService {
       : null;
     const knownOperatingResult = salesStats.knownGrossProfit - expensesTotal;
 
-    const expensesByCategory = await this.getExpensesByCategory(businessId, range.fromUtc, range.toUtc);
-    const expensesByPaymentMethod = await this.getExpensesByPaymentMethod(businessId, range.fromUtc, range.toUtc);
+    const expensesByCategory = await this.getExpensesByCategory(businessId, range.fromUtc, range.toUtc, range.countryCode);
+    const expensesByPaymentMethod = await this.getExpensesByPaymentMethod(businessId, range.fromUtc, range.toUtc, range.countryCode);
     const cashAudit = await this.getCashSessionsAudit(businessId, range.fromUtc, range.toUtc);
 
     return {
@@ -285,9 +289,8 @@ export class OperationalAnalyticsService {
     reportType: ExportReportType,
     range: DateRange
   ): Promise<{ headers: string[]; rows: (string | number)[][] }> {
-    const toMoneyNumber = (minor: number): number => {
-      return Number((minor / 100).toFixed(2));
-    };
+    const currency = COUNTRY_PROFILES[range.countryCode as SupportedCountryCode]?.primaryCurrency.code ?? 'CLP';
+    const toMoneyNumber = (minor: number): number => toMajorUnits(minor, currency as CurrencyCode);
 
     switch (reportType) {
       case 'SALES_SUMMARY': {
@@ -431,82 +434,23 @@ export class OperationalAnalyticsService {
     linesWithCostCount: number;
     totalLinesCount: number;
   }> {
-    if (isTauriEnvironment()) {
-      try {
-        const db = await this.dbManager.getDatabase();
-        if (db) {
-          const rows = await db.select<{
-            total_sales: number;
-            ticket_count: number;
-            total_discount: number;
-            known_profit: number;
-            known_cost: number;
-            eligible_revenue: number;
-            covered_revenue: number;
-            lines_with_cost: number;
-            total_lines: number;
-          }[]>(
-            `SELECT 
-              COALESCE(SUM(DISTINCT s.total), 0) AS total_sales,
-              COUNT(DISTINCT s.id) AS ticket_count,
-              COALESCE(SUM(DISTINCT s.discount_total), 0) AS total_discount,
-              COALESCE(SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' THEN (si.line_total - COALESCE(si.line_cost_total, 0)) ELSE 0 END), 0) AS known_profit,
-              COALESCE(SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' THEN COALESCE(si.line_cost_total, 0) ELSE 0 END), 0) AS known_cost,
-              COALESCE(SUM(si.line_total), 0) AS eligible_revenue,
-              COALESCE(SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' THEN si.line_total ELSE 0 END), 0) AS covered_revenue,
-              COALESCE(SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' THEN 1 ELSE 0 END), 0) AS lines_with_cost,
-              COUNT(si.id) AS total_lines
-            FROM sales s
-            LEFT JOIN sale_items si ON si.sale_id = s.id AND si.business_id = s.business_id
-            WHERE s.business_id = ? 
-              AND s.completed_at >= ? 
-              AND s.completed_at <= ? 
-              AND s.status = 'COMPLETED'`,
-            [businessId, fromUtc, toUtc]
-          );
-
-          if (rows.length > 0 && rows[0].ticket_count > 0) {
-            const r = rows[0];
-            const coverage = r.eligible_revenue > 0
-              ? Number(((r.covered_revenue / r.eligible_revenue) * 100).toFixed(1))
-              : (r.total_lines === 0 ? 100.0 : 0.0);
-
-            return {
-              totalSales: r.total_sales,
-              ticketCount: r.ticket_count,
-              totalDiscount: r.total_discount,
-              knownGrossProfit: r.known_profit,
-              knownCostTotal: r.known_cost,
-              costCoveragePercent: coverage,
-              linesWithCostCount: r.lines_with_cost,
-              totalLinesCount: r.total_lines,
-            };
-          }
-        }
-      } catch (err) {
-        logger.error('OperationalAnalyticsService', 'Error in getSalesTotalsAndCostCoverage SQLite', { error: String(err) });
-      }
-    }
-
-    // Fallback using SaleRepository
     const saleRepo = this.repoFactory.getSaleRepository();
     const summary = await saleRepo.getSalesSummary(businessId, fromUtc, toUtc);
-    const coverage = summary.profitQuality === 'COMPLETE' ? 100.0 : 0.0;
     return {
       totalSales: summary.totalSales,
       ticketCount: summary.ticketCount,
       totalDiscount: summary.totalDiscount,
-      knownGrossProfit: summary.profitMinor || 0,
-      knownCostTotal: 0,
-      costCoveragePercent: coverage,
-      linesWithCostCount: summary.profitQuality === 'COMPLETE' ? 1 : 0,
-      totalLinesCount: 1,
+      knownGrossProfit: summary.knownGrossProfit,
+      knownCostTotal: summary.knownCostTotal,
+      costCoveragePercent: summary.costCoveragePercent,
+      linesWithCostCount: summary.linesWithCostCount,
+      totalLinesCount: summary.totalLinesCount,
     };
   }
 
-  private async getOperatingExpensesTotal(businessId: string, fromUtc: string, toUtc: string): Promise<number> {
-    const startDate = fromUtc.slice(0, 10);
-    const endDate = toUtc.slice(0, 10);
+  private async getOperatingExpensesTotal(businessId: string, fromUtc: string, toUtc: string, countryCode?: string): Promise<number> {
+    const startDate = countryCode ? businessDateYmd(new Date(fromUtc), countryCode) : fromUtc.slice(0, 10);
+    const endDate = countryCode ? businessDateYmd(new Date(toUtc), countryCode) : toUtc.slice(0, 10);
 
     if (isTauriEnvironment()) {
       try {
@@ -625,69 +569,30 @@ export class OperationalAnalyticsService {
   }
 
   private async getSalesTimeSeries(businessId: string, range: DateRange): Promise<TimeSeriesPoint[]> {
-    if (isTauriEnvironment()) {
-      try {
-        const db = await this.dbManager.getDatabase();
-        if (db) {
-          const rows = await db.select<{
-            day_str: string;
-            total_sales: number;
-            ticket_count: number;
-          }[]>(
-            `SELECT 
-              strftime('%Y-%m-%d', completed_at) AS day_str,
-              COALESCE(SUM(total), 0) AS total_sales,
-              COUNT(id) AS ticket_count
-            FROM sales
-            WHERE business_id = ? 
-              AND completed_at >= ? 
-              AND completed_at <= ? 
-              AND status = 'COMPLETED'
-            GROUP BY strftime('%Y-%m-%d', completed_at)
-            ORDER BY day_str ASC`,
-            [businessId, range.fromUtc, range.toUtc]
-          );
-
-          const dateMap = new Map<string, { sales: number; count: number }>();
-          rows.forEach((r) => {
-            dateMap.set(r.day_str, { sales: r.total_sales, count: r.ticket_count });
-          });
-
-          // Generate sequential days within range
-          const result: TimeSeriesPoint[] = [];
-          const curr = new Date(range.startDate + 'T00:00:00');
-          const end = new Date(range.endDate + 'T00:00:00');
-
-          while (curr <= end) {
-            const ymd = curr.toISOString().slice(0, 10);
-            const entry = dateMap.get(ymd) || { sales: 0, count: 0 };
-            const dayNum = curr.getDate();
-            const monthShort = curr.toLocaleDateString('es-ES', { month: 'short' });
-
-            result.push({
-              date: ymd,
-              label: `${dayNum} ${monthShort}`,
-              sales: entry.sales,
-              ticketCount: entry.count,
-            });
-            curr.setDate(curr.getDate() + 1);
-          }
-
-          return result;
-        }
-      } catch (err) {
-        logger.error('OperationalAnalyticsService', 'Error in getSalesTimeSeries SQLite', { error: String(err) });
-      }
+    const sales = await this.repoFactory.getSaleRepository().listSales(businessId);
+    const days = new Map<string, { sales: number; count: number }>();
+    for (const sale of sales) {
+      if (sale.status !== 'COMPLETED' || sale.completedAt < range.fromUtc || sale.completedAt > range.toUtc) continue;
+      const ymd = range.countryCode
+        ? businessDateYmd(new Date(sale.completedAt), range.countryCode)
+        : sale.completedAt.slice(0, 10);
+      const current = days.get(ymd) ?? { sales: 0, count: 0 };
+      current.sales += sale.total;
+      current.count += 1;
+      days.set(ymd, current);
     }
-
-    return [
-      {
-        date: range.startDate,
-        label: range.startDate,
-        sales: 0,
-        ticketCount: 0,
-      },
-    ];
+    const result: TimeSeriesPoint[] = [];
+    for (let ymd = range.startDate; ymd <= range.endDate; ymd = shiftYmd(ymd, 1)) {
+      const current = days.get(ymd) ?? { sales: 0, count: 0 };
+      const date = new Date(`${ymd}T12:00:00.000Z`);
+      result.push({
+        date: ymd,
+        label: `${Number(ymd.slice(8))} ${date.toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' })}`,
+        sales: current.sales,
+        ticketCount: current.count,
+      });
+    }
+    return result;
   }
 
   private async getHourlySales(businessId: string, fromUtc: string, toUtc: string) {
@@ -722,7 +627,8 @@ export class OperationalAnalyticsService {
             total_revenue: number;
             ticket_count: number;
             estimated_cost: number | null;
-            cost_quality: string;
+            known_lines: number;
+            total_lines: number;
           }[]>(
             `SELECT 
               si.product_id,
@@ -732,8 +638,9 @@ export class OperationalAnalyticsService {
               COALESCE(SUM(si.quantity), 0) AS total_quantity_scaled,
               COALESCE(SUM(si.line_total), 0) AS total_revenue,
               COUNT(DISTINCT si.sale_id) AS ticket_count,
-              COALESCE(SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' THEN si.line_cost_total ELSE NULL END), NULL) AS estimated_cost,
-              si.cost_quality_snapshot AS cost_quality
+              SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' AND si.unit_cost_snapshot IS NOT NULL AND si.line_cost_total IS NOT NULL THEN si.line_cost_total ELSE 0 END) AS estimated_cost,
+              SUM(CASE WHEN si.cost_quality_snapshot = 'REAL' AND si.unit_cost_snapshot IS NOT NULL AND si.line_cost_total IS NOT NULL THEN 1 ELSE 0 END) AS known_lines,
+              COUNT(si.id) AS total_lines
             FROM sale_items si
             JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
             LEFT JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
@@ -754,7 +661,8 @@ export class OperationalAnalyticsService {
             const revenuePct = totalSalesRevenue > 0
               ? Number(((r.total_revenue / totalSalesRevenue) * 100).toFixed(1))
               : 0;
-            const grossProfit = r.estimated_cost !== null ? r.total_revenue - r.estimated_cost : null;
+            const completeCost = r.total_lines > 0 && r.known_lines === r.total_lines;
+            const grossProfit = completeCost && r.estimated_cost !== null ? r.total_revenue - r.estimated_cost : null;
 
             return {
               productId: r.product_id,
@@ -765,7 +673,7 @@ export class OperationalAnalyticsService {
               totalRevenue: r.total_revenue,
               revenuePercentOfTotal: revenuePct,
               ticketCount: r.ticket_count,
-              estimatedCost: r.estimated_cost,
+              estimatedCost: completeCost ? r.estimated_cost : null,
               grossProfit,
             };
           });
@@ -777,18 +685,41 @@ export class OperationalAnalyticsService {
 
     const saleRepo = this.repoFactory.getSaleRepository();
     const rows = await saleRepo.getTopSellingProducts(businessId, fromUtc, toUtc, limit);
-    return rows.map((r) => ({
+    const periodSales = (await saleRepo.listSales(businessId)).filter((sale) =>
+      sale.status === 'COMPLETED' && sale.completedAt >= fromUtc && sale.completedAt <= toUtc,
+    );
+    const saleDetails = await Promise.all(periodSales.map((sale) => saleRepo.getSaleById(sale.id)));
+    const costs = new Map<string, { knownCost: number; knownLines: number; totalLines: number }>();
+    for (const detail of saleDetails) {
+      if (!detail) continue;
+      for (const line of detail.items) {
+        if (!line.productId || line.lineType === 'OPEN_AMOUNT') continue;
+        const group = costs.get(line.productId) ?? { knownCost: 0, knownLines: 0, totalLines: 0 };
+        group.totalLines += 1;
+        if (line.costQualitySnapshot === 'REAL' && line.unitCostSnapshot != null && line.lineCostTotal != null) {
+          group.knownCost += line.lineCostTotal;
+          group.knownLines += 1;
+        }
+        costs.set(line.productId, group);
+      }
+    }
+    const totalRevenue = rows.reduce((sum, row) => sum + row.totalRevenue, 0);
+    return rows.map((r) => {
+      const cost = costs.get(r.productId);
+      const completeCost = cost !== undefined && cost.totalLines > 0 && cost.knownLines === cost.totalLines;
+      return {
       productId: r.productId,
       productName: r.productName,
       categoryName: 'General',
       baseUnit: r.baseUnit,
       quantitySold: r.totalQuantityMajor,
       totalRevenue: r.totalRevenue,
-      revenuePercentOfTotal: 0,
+      revenuePercentOfTotal: totalRevenue > 0 ? Number(((r.totalRevenue / totalRevenue) * 100).toFixed(1)) : 0,
       ticketCount: r.transactionCount,
-      estimatedCost: null,
-      grossProfit: null,
-    }));
+      estimatedCost: completeCost ? cost.knownCost : null,
+      grossProfit: completeCost ? r.totalRevenue - cost.knownCost : null,
+      };
+    });
   }
 
   private async getPaymentMethodBreakdown(
@@ -836,7 +767,27 @@ export class OperationalAnalyticsService {
         logger.error('OperationalAnalyticsService', 'Error in getPaymentMethodBreakdown SQLite', { error: String(err) });
       }
     }
-    return [];
+    const repo = this.repoFactory.getSaleRepository();
+    const sales = (await repo.listSales(businessId)).filter((sale) =>
+      sale.status === 'COMPLETED' && sale.completedAt >= fromUtc && sale.completedAt <= toUtc,
+    );
+    const details = await Promise.all(sales.map((sale) => repo.getSaleById(sale.id)));
+    const groups = new Map<string, { name: string; amount: number; saleIds: Set<string> }>();
+    for (const detail of details) {
+      if (!detail) continue;
+      for (const payment of detail.payments) {
+        const code = payment.paymentMethodCode;
+        const group = groups.get(code) ?? { name: payment.paymentMethodNameSnapshot, amount: 0, saleIds: new Set<string>() };
+        group.amount += payment.amount;
+        group.saleIds.add(detail.sale.id);
+        groups.set(code, group);
+      }
+    }
+    const total = [...groups.values()].reduce((sum, group) => sum + group.amount, 0);
+    return [...groups.entries()].map(([code, group]) => ({
+      code, name: group.name, totalAmount: group.amount, transactionCount: group.saleIds.size,
+      percentage: total > 0 ? Number(((group.amount / total) * 100).toFixed(1)) : 0,
+    }));
   }
 
   private async getCategorySalesBreakdown(
@@ -889,7 +840,39 @@ export class OperationalAnalyticsService {
         logger.error('OperationalAnalyticsService', 'Error in getCategorySalesBreakdown SQLite', { error: String(err) });
       }
     }
-    return [];
+    const saleRepo = this.repoFactory.getSaleRepository();
+    const productRepo = this.repoFactory.getProductRepository();
+    const sales = (await saleRepo.listSales(businessId)).filter((sale) =>
+      sale.status === 'COMPLETED' && sale.completedAt >= fromUtc && sale.completedAt <= toUtc,
+    );
+    const details = await Promise.all(sales.map((sale) => saleRepo.getSaleById(sale.id)));
+    const groups = new Map<string, { name: string; color?: string; revenue: number; count: number }>();
+    const productCategories = new Map<string, { id: string; name: string; color?: string }>();
+    for (const detail of details) {
+      if (!detail) continue;
+      for (const line of detail.items) {
+        let category: { id: string; name: string; color?: string } = { id: 'uncategorized', name: 'Sin categoría' };
+        if (line.productId) {
+          let resolved = productCategories.get(line.productId);
+          if (!resolved) {
+            const product = await productRepo.getDetailById(line.productId, businessId);
+            resolved = { id: product?.category?.id ?? 'uncategorized', name: product?.category?.name ?? 'Sin categoría',
+              color: product?.category?.color ?? undefined };
+            productCategories.set(line.productId, resolved);
+          }
+          category = resolved;
+        }
+        const group = groups.get(category.id) ?? { name: category.name, color: category.color, revenue: 0, count: 0 };
+        group.revenue += line.lineTotal;
+        group.count += 1;
+        groups.set(category.id, group);
+      }
+    }
+    const total = [...groups.values()].reduce((sum, group) => sum + group.revenue, 0);
+    return [...groups.entries()].map(([categoryId, group]) => ({
+      categoryId, categoryName: group.name, color: group.color, totalRevenue: group.revenue,
+      itemCount: group.count, percentage: total > 0 ? Number(((group.revenue / total) * 100).toFixed(1)) : 0,
+    }));
   }
 
   private async getSalesList(
@@ -921,7 +904,7 @@ export class OperationalAnalyticsService {
               s.subtotal,
               s.discount_total,
               s.total,
-              COUNT(si.id) AS item_count,
+              COUNT(DISTINCT si.id) AS item_count,
               COALESCE(GROUP_CONCAT(DISTINCT sp.payment_method_name_snapshot), 'Efectivo') AS payment_methods
             FROM sales s
             LEFT JOIN sale_items si ON si.sale_id = s.id AND si.business_id = s.business_id
@@ -952,7 +935,23 @@ export class OperationalAnalyticsService {
         logger.error('OperationalAnalyticsService', 'Error in getSalesList SQLite', { error: String(err) });
       }
     }
-    return [];
+    const repo = this.repoFactory.getSaleRepository();
+    const sales = (await repo.listSales(businessId))
+      .filter((sale) => sale.status === 'COMPLETED' && sale.completedAt >= fromUtc && sale.completedAt <= toUtc)
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt))
+      .slice(0, limit);
+    const details = await Promise.all(sales.map((sale) => repo.getSaleById(sale.id)));
+    return sales.map((sale, index) => ({
+      id: sale.id,
+      saleNumber: sale.saleNumber,
+      completedAt: sale.completedAt,
+      customerName: sale.customerNameSnapshot,
+      itemCount: details[index]?.items.length ?? 0,
+      subtotal: sale.subtotal,
+      discountTotal: sale.discountTotal,
+      total: sale.total,
+      paymentMethods: details[index]?.payments.map((payment) => payment.paymentMethodNameSnapshot).join(', ') || 'N/A',
+    }));
   }
 
   private async getLowStockProducts(businessId: string) {
@@ -1148,9 +1147,9 @@ export class OperationalAnalyticsService {
     return [];
   }
 
-  private async getExpensesByCategory(businessId: string, fromUtc: string, toUtc: string) {
-    const startDate = fromUtc.slice(0, 10);
-    const endDate = toUtc.slice(0, 10);
+  private async getExpensesByCategory(businessId: string, fromUtc: string, toUtc: string, countryCode?: string) {
+    const startDate = countryCode ? businessDateYmd(new Date(fromUtc), countryCode) : fromUtc.slice(0, 10);
+    const endDate = countryCode ? businessDateYmd(new Date(toUtc), countryCode) : toUtc.slice(0, 10);
 
     if (isTauriEnvironment()) {
       try {
@@ -1191,9 +1190,9 @@ export class OperationalAnalyticsService {
     return [];
   }
 
-  private async getExpensesByPaymentMethod(businessId: string, fromUtc: string, toUtc: string) {
-    const startDate = fromUtc.slice(0, 10);
-    const endDate = toUtc.slice(0, 10);
+  private async getExpensesByPaymentMethod(businessId: string, fromUtc: string, toUtc: string, countryCode?: string) {
+    const startDate = countryCode ? businessDateYmd(new Date(fromUtc), countryCode) : fromUtc.slice(0, 10);
+    const endDate = countryCode ? businessDateYmd(new Date(toUtc), countryCode) : toUtc.slice(0, 10);
 
     if (isTauriEnvironment()) {
       try {
@@ -1360,12 +1359,19 @@ export class OperationalAnalyticsService {
       }
     }
 
-    return {
-      identifiedRevenue: 0,
-      identifiedTickets: 0,
-      anonymousRevenue: 0,
-      anonymousTickets: 0,
-    };
+    const sales = (await this.repoFactory.getSaleRepository().listSales(businessId)).filter((sale) =>
+      sale.status === 'COMPLETED' && sale.completedAt >= fromUtc && sale.completedAt <= toUtc,
+    );
+    return sales.reduce((result, sale) => {
+      if (sale.customerId) {
+        result.identifiedRevenue += sale.total;
+        result.identifiedTickets += 1;
+      } else {
+        result.anonymousRevenue += sale.total;
+        result.anonymousTickets += 1;
+      }
+      return result;
+    }, { identifiedRevenue: 0, identifiedTickets: 0, anonymousRevenue: 0, anonymousTickets: 0 });
   }
 
   private async getTopCustomersInPeriod(
@@ -1422,7 +1428,24 @@ export class OperationalAnalyticsService {
         logger.error('OperationalAnalyticsService', 'Error in getTopCustomersInPeriod SQLite', { error: String(err) });
       }
     }
-    return [];
+    const sales = (await this.repoFactory.getSaleRepository().listSales(businessId)).filter((sale) =>
+      sale.status === 'COMPLETED' && sale.customerId && sale.completedAt >= fromUtc && sale.completedAt <= toUtc,
+    );
+    const groups = new Map<string, { name: string; spent: number; count: number; last: string }>();
+    for (const sale of sales) {
+      const customerId = sale.customerId!;
+      const group = groups.get(customerId) ?? { name: sale.customerNameSnapshot, spent: 0, count: 0, last: sale.completedAt };
+      group.spent += sale.total;
+      group.count += 1;
+      if (sale.completedAt > group.last) group.last = sale.completedAt;
+      groups.set(customerId, group);
+    }
+    return [...groups.entries()].sort((a, b) => b[1].spent - a[1].spent).slice(0, limit)
+      .map(([customerId, group]) => ({
+        customerId, name: group.name, phone: null, email: null,
+        totalSpentInPeriod: group.spent, ticketCountInPeriod: group.count,
+        averageTicket: Math.round(group.spent / group.count), lastPurchaseDate: group.last,
+      }));
   }
 }
 

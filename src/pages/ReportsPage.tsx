@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PageContainer } from '../components/shell/PageContainer';
 import { DateRange, ExecutiveSummaryMetrics, SalesAnalyticsView, InventoryAnalyticsView, FinancialAnalyticsView, CustomerAnalyticsView } from '../application/analytics/types';
 import { resolveDateRange } from '../application/analytics/DateRangeUtils';
+import { useCountry } from '../context/CountryContext';
+import { formatMoney as formatStoredMoney } from '../domain/common/money/Money';
+import { CurrencyCode } from '../types/country';
 import { operationalAnalyticsService } from '../application/analytics/OperationalAnalyticsService';
 import { AnalyticsKpiCard } from '../components/analytics/AnalyticsKpiCard';
 import { SimpleBarChart } from '../components/analytics/SimpleBarChart';
@@ -41,6 +44,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   onNavigateToSubscription,
 }) => {
   const businessId = 'primary-business';
+  const { countryCode, country } = useCountry();
 
   // Subscription state
   const [currentPlan, setCurrentPlan] = useState<'FREE' | 'PRO'>('FREE');
@@ -48,10 +52,15 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const [upgradeModalMessage, setUpgradeModalMessage] = useState<string | undefined>(undefined);
 
   // Date Range state (default: LAST_7_DAYS for Free plan compliance)
-  const [dateRange, setDateRange] = useState<DateRange>(() => resolveDateRange('LAST_7_DAYS'));
+  const [dateRange, setDateRange] = useState<DateRange>(() => resolveDateRange('LAST_7_DAYS', undefined, undefined, new Date(), countryCode));
+  const effectiveDateRange = useMemo(() => dateRange.countryCode === countryCode
+    ? dateRange
+    : resolveDateRange(dateRange.preset, dateRange.startDate, dateRange.endDate, new Date(), countryCode),
+  [dateRange, countryCode]);
   const [activeTab, setActiveTab] = useState<ReportTabKey>('resumen');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -67,25 +76,23 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   const [customerData, setCustomerData] = useState<CustomerAnalyticsView | null>(null);
 
   const formatMoney = useCallback((minor: number): string => {
-    return `$ ${(minor / 100).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  }, []);
+    return formatStoredMoney(minor, country.primaryCurrency.code as CurrencyCode);
+  }, [country.primaryCurrency.code]);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setLoadError(false);
       const subRepo = repositoryFactory.getSubscriptionRepository();
       const sub = await subRepo.getSubscription(businessId);
       setCurrentPlan(sub.plan);
 
       const [sum, sls, inv, fin, cust] = await Promise.all([
-        operationalAnalyticsService.getExecutiveSummary(businessId, dateRange),
-        operationalAnalyticsService.getSalesAnalytics(businessId, dateRange),
-        operationalAnalyticsService.getInventoryAnalytics(businessId, dateRange),
-        operationalAnalyticsService.getFinancialAnalytics(businessId, dateRange),
-        operationalAnalyticsService.getCustomerAnalytics(businessId, dateRange),
+        operationalAnalyticsService.getExecutiveSummary(businessId, effectiveDateRange),
+        operationalAnalyticsService.getSalesAnalytics(businessId, effectiveDateRange),
+        operationalAnalyticsService.getInventoryAnalytics(businessId, effectiveDateRange),
+        operationalAnalyticsService.getFinancialAnalytics(businessId, effectiveDateRange),
+        operationalAnalyticsService.getCustomerAnalytics(businessId, effectiveDateRange),
       ]);
 
       setSummaryData(sum);
@@ -95,19 +102,28 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       setCustomerData(cust);
     } catch (err) {
       console.error('Error loading operational reports data:', err);
+      setLoadError(true);
+      setSummaryData(null);
+      setSalesData(null);
+      setInventoryData(null);
+      setFinancialData(null);
+      setCustomerData(null);
     } finally {
       setLoading(false);
     }
-  }, [businessId, dateRange]);
+  }, [businessId, effectiveDateRange]);
 
   useEffect(() => {
     let isCancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    setLoadError(false);
     Promise.all([
-      operationalAnalyticsService.getExecutiveSummary(businessId, dateRange),
-      operationalAnalyticsService.getSalesAnalytics(businessId, dateRange),
-      operationalAnalyticsService.getInventoryAnalytics(businessId, dateRange),
-      operationalAnalyticsService.getFinancialAnalytics(businessId, dateRange),
-      operationalAnalyticsService.getCustomerAnalytics(businessId, dateRange),
+      operationalAnalyticsService.getExecutiveSummary(businessId, effectiveDateRange),
+      operationalAnalyticsService.getSalesAnalytics(businessId, effectiveDateRange),
+      operationalAnalyticsService.getInventoryAnalytics(businessId, effectiveDateRange),
+      operationalAnalyticsService.getFinancialAnalytics(businessId, effectiveDateRange),
+      operationalAnalyticsService.getCustomerAnalytics(businessId, effectiveDateRange),
     ])
       .then(([sum, sls, inv, fin, cust]) => {
         if (!isCancelled) {
@@ -116,12 +132,19 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
           setInventoryData(inv);
           setFinancialData(fin);
           setCustomerData(cust);
+          setLoadError(false);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (!isCancelled) {
           console.error('Error loading operational reports data:', err);
+          setLoadError(true);
+          setSummaryData(null);
+          setSalesData(null);
+          setInventoryData(null);
+          setFinancialData(null);
+          setCustomerData(null);
           setLoading(false);
         }
       });
@@ -129,7 +152,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     return () => {
       isCancelled = true;
     };
-  }, [businessId, dateRange]);
+  }, [businessId, effectiveDateRange]);
 
   const reportPresets: DateRangeSelectorPreset[] = [
     { key: 'TODAY', label: 'Hoy' },
@@ -181,8 +204,10 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
 
         <div className="flex items-center gap-2.5 flex-wrap">
           <DateRangeSelector
-            currentRange={dateRange}
-            onRangeChange={(newRange) => setDateRange(newRange)}
+            currentRange={effectiveDateRange}
+            onRangeChange={(newRange) => setDateRange(resolveDateRange(
+              newRange.preset, newRange.startDate, newRange.endDate, new Date(), countryCode,
+            ))}
             presets={reportPresets}
             onLockedOptionSelect={handleLockedPresetSelect}
           />
@@ -217,7 +242,12 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
       </div>
 
       {/* Main Content Area */}
-      {loading && !summaryData ? (
+      {loadError ? (
+        <div role="alert" className="py-20 text-center text-content3">
+          No se pudieron cargar los reportes. Los importes no se muestran como cero porque la consulta falló.
+          <button type="button" onClick={loadData} className="block mx-auto mt-4 underline">Reintentar</button>
+        </div>
+      ) : loading && !summaryData ? (
         <div className="py-20 flex flex-col items-center justify-center gap-3 text-content4">
           <RefreshCw size={28} className="animate-spin text-primary" />
           <p className="text-sm">Cargando métricas del sistema local...</p>
@@ -242,8 +272,9 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
 
                 <AnalyticsKpiCard
                   title="Ganancia Bruta Conocida"
-                  value={formatMoney(summaryData.knownGrossProfit)}
-                  subtitle={`Cobertura de costo: ${summaryData.costCoveragePercent}%`}
+                  value={summaryData.totalSales.current > 0 && summaryData.costQuality === 'NONE' ? '—' : formatMoney(summaryData.knownGrossProfit)}
+                  subtitle={summaryData.totalSales.current > 0 && summaryData.costQuality === 'NONE'
+                    ? 'Sin costo histórico conocido' : `Cobertura de costo: ${summaryData.costCoveragePercent}%`}
                   tooltip="Calculada sobre líneas con snapshot de costo unitario real verificado."
                   icon={<TrendingUp size={18} />}
                   badge={{
@@ -282,7 +313,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
                 ) : (
                   <AnalyticsKpiCard
                     title="Resultado Parcial Conocido"
-                    value={formatMoney(summaryData.knownOperatingResult)}
+                    value={summaryData.totalSales.current > 0 && summaryData.costQuality === 'NONE'
+                      ? '—' : formatMoney(summaryData.knownOperatingResult)}
                     subtitle={`Exclusivo para la porción costeada (${summaryData.costCoveragePercent}%)`}
                     tooltip="El resultado global no se proyecta para preservar exactitud contable estricta."
                     icon={<HelpCircle size={18} />}
@@ -454,8 +486,10 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
 
                 <AnalyticsKpiCard
                   title="Ganancia Bruta Conocida"
-                  value={formatMoney(salesData.summary.knownGrossProfit)}
-                  subtitle={`Cobertura: ${salesData.summary.costCoveragePercent}%`}
+                  value={salesData.summary.totalSales > 0 && salesData.summary.linesWithCostCount === 0
+                    ? '—' : formatMoney(salesData.summary.knownGrossProfit)}
+                  subtitle={salesData.summary.totalSales > 0 && salesData.summary.linesWithCostCount === 0
+                    ? 'Sin costo histórico conocido' : `Cobertura: ${salesData.summary.costCoveragePercent}%`}
                   icon={<TrendingUp size={18} />}
                   badge={{
                     text: `${salesData.summary.linesWithCostCount}/${salesData.summary.totalLinesCount} Líneas`,
@@ -718,8 +752,10 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
 
                 <AnalyticsKpiCard
                   title="Costo de Ventas (Conocido)"
-                  value={formatMoney(financialData.pnl.knownCostOfGoodsSold)}
-                  subtitle={`Cobertura: ${financialData.pnl.costCoveragePercent}%`}
+                  value={financialData.pnl.netSales > 0 && financialData.pnl.costCoveragePercent === 0
+                    ? '—' : formatMoney(financialData.pnl.knownCostOfGoodsSold)}
+                  subtitle={financialData.pnl.netSales > 0 && financialData.pnl.costCoveragePercent === 0
+                    ? 'Sin costo histórico conocido' : `Cobertura: ${financialData.pnl.costCoveragePercent}%`}
                   icon={<TrendingUp size={18} />}
                 />
 
@@ -742,7 +778,8 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
                 ) : (
                   <AnalyticsKpiCard
                     title="Resultado Operativo Conocido"
-                    value={formatMoney(financialData.pnl.knownOperatingResult)}
+                    value={financialData.pnl.netSales > 0 && financialData.pnl.costCoveragePercent === 0
+                      ? '—' : formatMoney(financialData.pnl.knownOperatingResult)}
                     subtitle={`Para porción con costo conocido (${financialData.pnl.costCoveragePercent}%)`}
                     icon={<HelpCircle size={18} />}
                     badge={{ text: 'Cobertura Parcial', variant: 'warning' }}
@@ -986,7 +1023,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         businessId={businessId}
-        currentRange={dateRange}
+        currentRange={effectiveDateRange}
         onSuccessToast={showToast}
       />
 

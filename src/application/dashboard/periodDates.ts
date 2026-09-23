@@ -1,5 +1,7 @@
 ﻿export type DashboardPeriod = 'today' | 'week' | 'month';
 
+import { businessDateYmd, businessDayEndUtc, businessDayStartUtc, shiftYmd } from '../../domain/common/time/BusinessCalendar';
+
 export interface UtcDateRange {
   fromUtc: string;
   toUtc: string;
@@ -9,32 +11,16 @@ export interface UtcDateRange {
  * Computes exact UTC ISO strings for local calendar periods ('today', 'week', 'month').
  * Handles business local timezone boundaries without clipping or date displacement.
  */
-export function getPeriodUtcDateRange(period: DashboardPeriod, referenceDate: Date = new Date()): UtcDateRange {
-  const localYear = referenceDate.getFullYear();
-  const localMonth = referenceDate.getMonth();
-  const localDate = referenceDate.getDate();
-
-  let startLocal: Date;
-  let endLocal: Date;
-
+export function getPeriodUtcDateRange(period: DashboardPeriod, referenceDate: Date = new Date(), countryCode = 'CL'): UtcDateRange {
+  const todayYmd = businessDateYmd(referenceDate, countryCode);
   if (period === 'today') {
-    startLocal = new Date(localYear, localMonth, localDate, 0, 0, 0, 0);
-    endLocal = new Date(localYear, localMonth, localDate, 23, 59, 59, 999);
-  } else if (period === 'week') {
-    // Current week: Start on Monday
-    const day = referenceDate.getDay(); // 0 is Sunday, 1 is Monday...
-    const diffToMonday = (day === 0 ? -6 : 1) - day;
-    startLocal = new Date(localYear, localMonth, localDate + diffToMonday, 0, 0, 0, 0);
-    endLocal = new Date(localYear, localMonth, localDate + diffToMonday + 6, 23, 59, 59, 999);
-  } else {
-    // Current month: 1st of month to last day
-    startLocal = new Date(localYear, localMonth, 1, 0, 0, 0, 0);
-    const lastDayOfMonth = new Date(localYear, localMonth + 1, 0).getDate();
-    endLocal = new Date(localYear, localMonth, lastDayOfMonth, 23, 59, 59, 999);
+    return { fromUtc: businessDayStartUtc(todayYmd, countryCode), toUtc: businessDayEndUtc(todayYmd, countryCode) };
   }
-
-  return {
-    fromUtc: startLocal.toISOString(),
-    toUtc: endLocal.toISOString(),
-  };
+  if (period === 'month') {
+    return { fromUtc: businessDayStartUtc(`${todayYmd.slice(0, 7)}-01`, countryCode), toUtc: businessDayEndUtc(todayYmd, countryCode) };
+  }
+  const [year, month, day] = todayYmd.split('-').map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const mondayYmd = shiftYmd(todayYmd, weekday === 0 ? -6 : 1 - weekday);
+  return { fromUtc: businessDayStartUtc(mondayYmd, countryCode), toUtc: businessDayEndUtc(todayYmd, countryCode) };
 }

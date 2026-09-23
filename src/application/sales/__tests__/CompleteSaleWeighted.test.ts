@@ -164,6 +164,12 @@ describe('CompleteSale — Weighted Products & FEFO Lot Allocation', () => {
     expect(result.saleWithDetails?.items[0].saleMode).toBe('WEIGHT');
     expect(result.saleWithDetails?.items[0].weightGrams).toBe(260);
     expect(result.saleWithDetails?.items[0].inventoryQuantityDelta).toBe(-260);
+    expect(result.saleWithDetails?.items[0].unitCostSnapshot).toBe(5000);
+    expect(result.saleWithDetails?.items[0].lineCostTotal).toBe(1300);
+    expect(result.saleWithDetails?.items[0].costQualitySnapshot).toBe('REAL');
+
+    const summary = await saleRepo.getSalesSummary(businessId, '2000-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z');
+    expect(summary.knownGrossProfit).toBe(1037);
 
     // Verify remaining stock in grams: 1000 - 260 = 740 g
     const remainingStock = await movementRepo.getCurrentStock(weightedProduct.id, businessId);
@@ -173,6 +179,27 @@ describe('CompleteSale — Weighted Products & FEFO Lot Allocation', () => {
     expect(result.receipt?.items[0].quantityFormatted).toBe('260 g');
     expect(result.receipt?.items[0].unitPriceFormatted).toContain('8.990');
     expect(result.receipt?.items[0].lineTotalFormatted).toContain('2.337');
+  });
+
+  it('snapshots 250 g at 9000 price/kg and 4000 cost/kg as revenue 2250, cost 1000, profit 1250', async () => {
+    await productRepo.save({ ...weightedProduct, salePrice: 9000, costPrice: 4000 });
+    await movementRepo.recordMovement({
+      businessId, productId: weightedProduct.id, movementType: 'OPENING',
+      quantityDelta: 1000, unitCost: 4000, totalCost: 4000,
+      reasonCode: null, note: 'Costed opening stock', referenceType: null,
+      referenceId: null, createdByUserId: userId,
+    });
+    const result = await completeSale.execute({
+      businessId, userId, userName: 'Test Cashier', idempotencyKey: 'weighted-250',
+      items: [{ productId: weightedProduct.id, saleMode: 'WEIGHT', weightGrams: 250,
+        quantity: 250, expectedUnitPrice: 9000 }],
+      payments: [{ paymentMethodId: cashMethodId, amount: 2250 }],
+    });
+    expect(result.success).toBe(true);
+    expect(result.saleWithDetails?.items[0].lineTotal).toBe(2250);
+    expect(result.saleWithDetails?.items[0].lineCostTotal).toBe(1000);
+    const summary = await saleRepo.getSalesSummary(businessId, '2000-01-01T00:00:00.000Z', '2099-01-01T00:00:00.000Z');
+    expect(summary.knownGrossProfit).toBe(1250);
   });
 
   it('performs FEFO multi-lot allocation across 2 lots in grams (Adjustment 6)', async () => {

@@ -2,6 +2,8 @@ import { SaleRepository } from '../../domain/sales/repositories/SaleRepository';
 import { InventoryQueryRepository } from '../../domain/inventory/repositories/InventoryQueryRepository';
 import { DashboardData } from '../../types/dashboard';
 import { DashboardPeriod, getPeriodUtcDateRange } from './periodDates';
+import { getTimezoneForCountry } from '../subscription/TimezoneUtils';
+import { aggregateSalesPeriod } from '../../domain/sales/SalesPeriodAggregation';
 
 export interface DashboardMetricsResult extends DashboardData {
   profitQuality: 'COMPLETE' | 'INCOMPLETE';
@@ -13,8 +15,8 @@ export class GetDashboardMetrics {
     private inventoryQueryRepo: InventoryQueryRepository
   ) {}
 
-  async execute(businessId: string, period: DashboardPeriod = 'today'): Promise<DashboardMetricsResult> {
-    const { fromUtc, toUtc } = getPeriodUtcDateRange(period);
+  async execute(businessId: string, period: DashboardPeriod = 'today', countryCode = 'CL'): Promise<DashboardMetricsResult> {
+    const { fromUtc, toUtc } = getPeriodUtcDateRange(period, new Date(), countryCode);
 
     // 1. Fetch sales summary via SQLite aggregate query
     const summary = await this.saleRepo.getSalesSummary(businessId, fromUtc, toUtc);
@@ -23,20 +25,27 @@ export class GetDashboardMetrics {
     const inventoryMetrics = await this.inventoryQueryRepo.getMetrics(businessId);
     const lowStockCount = inventoryMetrics.lowStockCount + inventoryMetrics.outOfStockCount;
 
-    // 3. Fetch hourly breakdown
-    const hourlyRaw = await this.saleRepo.getHourlySales(businessId, fromUtc, toUtc);
-
-    // Format hourly intervals for the 7-bar chart view (e.g. 08:00, 10:00, 12:00, 14:00, 16:00, 18:00, 20:00)
+    // Use the same persisted sale/item snapshots as the period summary.
+    const periodSales = (await this.saleRepo.listSales(businessId)).filter((sale) =>
+      sale.status === 'COMPLETED' && sale.completedAt >= fromUtc && sale.completedAt <= toUtc,
+    );
+    const saleDetails = await Promise.all(periodSales.map((sale) => this.saleRepo.getSaleById(sale.id)));
+    const hourlyFormatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: getTimezoneForCountry(countryCode), hour: '2-digit', hourCycle: 'h23',
+    });
     const targetHours = [8, 10, 12, 14, 16, 18, 20];
     const hourlySales = targetHours.map((h) => {
-      // Sum the 2-hour window [h, h+1]
-      const pt1 = hourlyRaw.find((p) => p.hour === h);
-      const pt2 = hourlyRaw.find((p) => p.hour === h + 1);
-      const sales = (pt1?.totalSales || 0) + (pt2?.totalSales || 0);
+      const selected = periodSales.filter((sale) => {
+        const localHour = Number(hourlyFormatter.format(new Date(sale.completedAt)));
+        return localHour === h || localHour === h + 1;
+      });
+      const selectedIds = new Set(selected.map((sale) => sale.id));
+      const items = saleDetails.flatMap((details) => details?.items ?? []).filter((item) => selectedIds.has(item.saleId));
+      const aggregate = aggregateSalesPeriod(selected, items, businessId, fromUtc, toUtc);
       return {
         hour: `${String(h).padStart(2, '0')}:00`,
-        sales,
-        profit: 0,
+        sales: aggregate.totalSales,
+        profit: selected.length === 0 ? 0 : aggregate.profitMinor,
       };
     });
 
@@ -52,7 +61,7 @@ export class GetDashboardMetrics {
 
     const marginPercent =
       summary.totalSales > 0 && summary.profitMinor != null
-        ? Math.round((summary.profitMinor / summary.totalSales) * 100)
+        ? Math.round((summary.profitMinor / summary.totalSales) * 10_000) / 100
         : 0;
 
     return {

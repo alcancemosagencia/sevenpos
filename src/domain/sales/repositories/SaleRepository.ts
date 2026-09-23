@@ -16,6 +16,11 @@ export interface SalesPeriodSummary {
   totalDiscount: number;
   profitMinor: number | null; // null if any item in period lacks REAL cost snapshot
   profitQuality: 'COMPLETE' | 'INCOMPLETE';
+  knownCostTotal: number;
+  knownGrossProfit: number;
+  costCoveragePercent: number;
+  linesWithCostCount: number;
+  totalLinesCount: number;
 }
 
 export interface HourlySalesPoint {
