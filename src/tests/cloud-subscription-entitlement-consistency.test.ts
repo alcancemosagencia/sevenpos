@@ -112,6 +112,32 @@ describe('CloudSubscriptionRepository & Canonical Entitlement Consistency (PLATF
     expect(sub.status).toBe('ACTIVE');
   });
 
+  it('maps a UUID-shaped local business ID to its cloud subscription before querying', async () => {
+    const localBusinessId = 'da865422-16fd-4199-9361-705c3422077f';
+    DeviceEnrollmentStorage.saveEnrollment({
+      deviceId: 'dev-local-uuid',
+      deviceType: 'WEB',
+      displayName: 'Caja 1',
+      platform: 'Windows',
+      accountEmail: 'owner@sevenpos.pro',
+      userId: 'owner-1',
+      businessName: 'Minimarket Don Pepe',
+      cloudBusinessId: validCloudBizId,
+      localBusinessId,
+      enrolledAt: '2026-09-01T00:00:00Z',
+    });
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'owner-1' } }, error: null });
+    const eq = vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({
+      data: { plan_code: 'PRO', status: 'ACTIVE', billing_source: 'MERCADO_PAGO' }, error: null,
+    }) });
+    mockSupabase.from.mockReturnValue({ select: vi.fn().mockReturnValue({ eq }) });
+
+    const sub = await repo.getSubscription(localBusinessId);
+    expect(eq).toHaveBeenCalledWith('business_id', validCloudBizId);
+    expect(sub.plan).toBe('PRO');
+    expect(sub.billingSource).toBe('MERCADO_PAGO');
+  });
+
   it('resolves cloud UUID from CloudBusinessLinkStorage when businessId is not a UUID', async () => {
     CloudBusinessLinkStorage.saveLink({
       cloudBusinessId: validCloudBizId,
@@ -222,21 +248,30 @@ describe('CloudSubscriptionRepository & Canonical Entitlement Consistency (PLATF
     expect(sub.resolutionReason).toBe('CONFIRMED_PRO');
   });
 
-  it('marks resolutionReason as CONFIRMED_FREE when cloud returns no subscription row', async () => {
-    mockSupabase.from.mockReturnValue({
+  it('does not confirm FREE when an authenticated cloud query returns no subscription row without membership', async () => {
+    mockSupabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'owner-1' } }, error: null });
+    mockSupabase.from.mockImplementation((table: string) => ({
       select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: null,
-            error: null,
-          }),
-        }),
+        eq: vi.fn().mockImplementation(() => ({
+          eq: vi.fn().mockImplementation(() => ({
+            eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+          })),
+          maybeSingle: vi.fn().mockResolvedValue({ data: table === 'business_subscriptions' ? null : { business_id: validCloudBizId }, error: null }),
+        })),
       }),
-    });
+    }));
 
     const sub = await repo.getSubscription(validCloudBizId);
     expect(sub.plan).toBe('FREE');
-    expect(sub.resolutionReason).toBe('CONFIRMED_FREE');
+    expect(sub.resolutionReason).toBe('LOAD_ERROR');
+  });
+
+  it('does not classify an unauthenticated empty RLS result as confirmed FREE', async () => {
+    mockSupabase.from.mockReturnValue({ select: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+    }) });
+    const sub = await repo.getSubscription(validCloudBizId);
+    expect(sub.resolutionReason).toBe('LOAD_ERROR');
   });
 
   it('marks resolutionReason as RLS_DENIED when permission is denied', async () => {

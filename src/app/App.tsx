@@ -63,9 +63,7 @@ import { SettingsPage } from '../pages/SettingsPage';
 import { HelpPage } from '../pages/HelpPage';
 import { SubscriptionPage } from '../pages/SubscriptionPage';
 import { SubscriptionReturnPage } from '../pages/SubscriptionReturnPage';
-import { PlanCode } from '../domain/subscription/Plan';
-import { effectivePlanCode } from '../domain/subscription/Subscription';
-import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
+import { useResolvedEntitlement } from '../application/subscription/useResolvedEntitlement';
 import { isEditableTarget } from '../utils/keyboard';
 
 // Navigation titles lookup
@@ -237,7 +235,6 @@ const AppRoot: React.FC = () => {
 
   const { currentOperator, activeRole, can, openFastSwitchModal } = useOperationalSession();
 
-  const [subscriptionPlan, setSubscriptionPlan] = useState<PlanCode>('FREE');
   const activeBusinessId = businessId || 'primary-business';
 
   const [activeNavId, setActiveNavId] = useState<string>(() => {
@@ -250,26 +247,7 @@ const AppRoot: React.FC = () => {
     return 'dashboard';
   });
 
-  useEffect(() => {
-    let isMounted = true;
-    const loadSubscription = async () => {
-      try {
-        const subRepo = repositoryFactory.getSubscriptionRepository();
-        const sub = await subRepo.getSubscription(activeBusinessId);
-        if (isMounted) {
-          setSubscriptionPlan(effectivePlanCode(sub));
-        }
-      } catch {
-        if (isMounted) {
-          setSubscriptionPlan('FREE');
-        }
-      }
-    };
-    loadSubscription();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeBusinessId, activeNavId]);
+  const entitlement = useResolvedEntitlement(activeBusinessId, activeNavId);
 
   const [productSubView, setProductSubView] = useState<'list' | 'new' | 'edit' | 'detail'>('list');
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
@@ -963,7 +941,7 @@ const AppRoot: React.FC = () => {
         userName={effectiveUserName}
         userRole={effectiveUserRole}
         canManageSettings={can('settings.manage')}
-        planCode={subscriptionPlan}
+        planCode={entitlement.plan}
         onNavigateToSubscription={() => handleNavigateNav('subscription')}
       >
         {!isCloudLinked && <LinkAccountBanner onOpenLinkModal={openLinkingModal} />}

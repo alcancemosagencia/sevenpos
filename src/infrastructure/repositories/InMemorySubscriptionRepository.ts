@@ -17,6 +17,7 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
       plan: 'FREE',
       status: 'ACTIVE',
       source: 'LOCAL_FALLBACK',
+      resolutionReason: 'CONFIRMED_FREE',
       updatedAt: new Date().toISOString(),
     };
     this.subscriptions.set(businessId, defaultSub);

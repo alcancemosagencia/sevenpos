@@ -3,6 +3,7 @@ import { renderToString } from 'react-dom/server';
 import { ReportsPage } from '../pages/ReportsPage';
 import { CountryProvider } from '../context/CountryContext';
 import { ThemeProvider } from '../context/ThemeContext';
+import { AuthProvider } from '../context/AuthContext';
 
 describe('Reports Date Selector Consistency', () => {
   beforeAll(() => {
@@ -22,7 +23,9 @@ describe('Reports Date Selector Consistency', () => {
     const html = renderToString(
       <ThemeProvider>
         <CountryProvider>
-          <ReportsPage />
+          <AuthProvider>
+            <ReportsPage />
+          </AuthProvider>
         </CountryProvider>
       </ThemeProvider>
     );

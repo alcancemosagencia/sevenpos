@@ -186,9 +186,8 @@ describe('AG-15D-01: Subscription Page - Chile vs Venezuela vs Pro & Monochrome 
       </CountryProvider>
     );
 
-    expect(html).toContain('Continuar con Mercado Pago');
-    expect(html).toContain('Hablar con Ventas');
-    expect(html).toContain('Pago seguro procesado por Mercado Pago');
+    expect(html).toContain('Verificando tu plan');
+    expect(html).not.toContain('Continuar con Mercado Pago');
     // Ensure no amber or yellow classes in rendered output
     expect(html).not.toContain('bg-amber-500');
     expect(html).not.toContain('text-amber-600');
@@ -205,8 +204,7 @@ describe('AG-15D-01: Subscription Page - Chile vs Venezuela vs Pro & Monochrome 
     );
 
     expect(html).not.toContain('Continuar con Mercado Pago');
-    expect(html).toContain('Contactar a Ventas por WhatsApp');
-    expect(html).toContain('Activación asistida para Venezuela');
-    expect(html).toContain('Te ayudaremos con la activación de SevenPOS Pro');
+    expect(html).toContain('Verificando tu plan');
+    expect(html).not.toContain('Contactar a Ventas por WhatsApp');
   });
 });

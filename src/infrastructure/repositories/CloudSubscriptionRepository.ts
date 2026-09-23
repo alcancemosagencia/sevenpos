@@ -9,7 +9,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 
 /**
  * CloudSubscriptionRepository — reads subscription state from Supabase.
- * Priority: verified cloud state → FREE fallback.
+ * Priority: verified cloud state. Unavailable cloud state is not confirmed FREE.
  * Never calls Mercado Pago directly.
  */
 export class CloudSubscriptionRepository implements ISubscriptionRepository {
@@ -17,23 +17,31 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
     try {
       const supabase = getSupabaseClient();
       let targetBusinessId = businessId;
+      const enrollment = DeviceEnrollmentStorage.getEnrollment();
+      const link = CloudBusinessLinkStorage.getLink();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+
+      // A local business ID may itself be a UUID. Match the device's local-to-cloud
+      // mapping before assuming any UUID is the cloud subscription key.
+      const enrollmentMatches = enrollment && (!authUser || enrollment.userId === authUser.id) &&
+        (businessId === enrollment.localBusinessId || businessId === enrollment.cloudBusinessId || businessId === 'primary-business');
+      const linkMatches = link && (!authUser || link.cloudUserId === authUser.id) &&
+        (businessId === link.localBusinessId || businessId === link.cloudBusinessId || businessId === 'primary-business');
+      if (enrollmentMatches && UUID_REGEX.test(enrollment.cloudBusinessId)) {
+        targetBusinessId = enrollment.cloudBusinessId;
+      } else if (linkMatches && UUID_REGEX.test(link.cloudBusinessId)) {
+        targetBusinessId = link.cloudBusinessId;
+      }
 
       // If businessId is not a valid UUID, attempt resolution from storage or active membership
       if (!targetBusinessId || !UUID_REGEX.test(targetBusinessId)) {
-        const enrollment = DeviceEnrollmentStorage.getEnrollment();
-        const link = CloudBusinessLinkStorage.getLink();
-        if (enrollment?.cloudBusinessId && UUID_REGEX.test(enrollment.cloudBusinessId)) {
-          targetBusinessId = enrollment.cloudBusinessId;
-        } else if (link?.cloudBusinessId && UUID_REGEX.test(link.cloudBusinessId)) {
-          targetBusinessId = link.cloudBusinessId;
-        } else {
+        if (businessId === 'primary-business' && !enrollmentMatches && !linkMatches) {
           // Check active user session memberships via Supabase
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
+          if (authUser) {
             const { data: membership } = await supabase
               .from('business_memberships')
               .select('business_id')
-              .eq('user_id', user.id)
+              .eq('user_id', authUser.id)
               .eq('status', 'ACTIVE')
               .order('created_at', { ascending: true })
               .limit(1)
@@ -46,7 +54,7 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
         }
       }
 
-      // If we still don't have a valid UUID, safely return fallback
+      // If we still don't have a valid UUID, return an unresolved state.
       if (!targetBusinessId || !UUID_REGEX.test(targetBusinessId)) {
         const hasEnrollmentOrLink = Boolean(
           DeviceEnrollmentStorage.getEnrollment()?.cloudBusinessId ||
@@ -62,7 +70,7 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
 
       const { data, error } = await supabase
         .from('business_subscriptions')
-        .select('plan_code, status, cancel_at_period_end, current_period_end, updated_at')
+        .select('plan_code, status, billing_source, cancel_at_period_end, current_period_end, updated_at')
         .eq('business_id', targetBusinessId)
         .maybeSingle();
 
@@ -77,12 +85,31 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
       }
 
       if (!data) {
-        // No subscription row in cloud → CONFIRMED_FREE
+        // RLS also returns zero rows for an unauthenticated request. Never call that confirmed FREE.
+        if (!authUser) {
+          return this.freeFallback(businessId, 'CLOUD', 'LOAD_ERROR', 'Cloud session unavailable.');
+        }
+        // No row can also mean RLS silently filtered it. Confirm an active
+        // membership before treating absence of a subscription as FREE.
+        const { data: membership, error: membershipError } = await supabase
+          .from('business_memberships')
+          .select('business_id')
+          .eq('business_id', targetBusinessId)
+          .eq('user_id', authUser.id)
+          .eq('status', 'ACTIVE')
+          .maybeSingle();
+        if (membershipError || !membership) {
+          return this.freeFallback(businessId, 'CLOUD', membershipError ? 'RLS_DENIED' : 'LOAD_ERROR', membershipError?.message);
+        }
         return this.freeFallback(businessId, 'CLOUD', 'CONFIRMED_FREE');
       }
 
       // Map cloud status to Subscription type
       const status = this.mapStatus(data.status);
+      if (!status) return this.freeFallback(businessId, 'CLOUD', 'LOAD_ERROR', 'Unknown subscription status.');
+      if (data.plan_code !== 'PRO' && data.plan_code !== 'FREE') {
+        return this.freeFallback(businessId, 'CLOUD', 'LOAD_ERROR', 'Unknown subscription plan.');
+      }
       const plan: PlanCode = this.effectivePlan(data.plan_code, status);
 
       return {
@@ -94,6 +121,7 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
         updatedAt: data.updated_at ?? new Date().toISOString(),
         cancelAtPeriodEnd: data.cancel_at_period_end ?? false,
         periodEnd: data.current_period_end ?? null,
+        billingSource: data.billing_source ?? null,
       };
     } catch (err) {
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -115,10 +143,10 @@ export class CloudSubscriptionRepository implements ISubscriptionRepository {
     return this.getSubscription(businessId);
   }
 
-  private mapStatus(cloudStatus: string): Subscription['status'] {
+  private mapStatus(cloudStatus: string): Subscription['status'] | null {
     const valid: readonly string[] = ['PENDING', 'ACTIVE', 'PAST_DUE', 'EXPIRED'];
     if (valid.indexOf(cloudStatus) !== -1) return cloudStatus as Subscription['status'];
-    return 'ACTIVE'; // unknown status → treat as active (defensive)
+    return null;
   }
 
   private effectivePlan(planCode: string, status: Subscription['status']): PlanCode {

@@ -4,6 +4,7 @@ import { MetricUsage, UsageOverview, UsageState } from '../../domain/subscriptio
 import { ISubscriptionRepository } from '../../domain/subscription/SubscriptionRepository';
 import { repositoryFactory } from '../../infrastructure/repositories/RepositoryFactory';
 import { getLocalMonthInterval } from './TimezoneUtils';
+import { EntitlementUnavailableError, isConfirmedEntitlement } from '../../domain/subscription/SubscriptionResolution';
 
 import { ProductRepository } from '../../domain/catalog/ProductRepository';
 import { CustomerQueryRepository } from '../../domain/customers/repositories/CustomerQueryRepository';
@@ -97,6 +98,7 @@ export class UsageService implements IUsageService {
 
   async getUsageOverview(businessId: string): Promise<UsageOverview> {
     const sub = await this.subscriptionRepo.getSubscription(businessId);
+    if (!isConfirmedEntitlement(sub)) throw new EntitlementUnavailableError(sub.resolutionReason);
     const planCode = sub.plan;
     const planDef = PLAN_DEFINITIONS[planCode];
 

@@ -29,7 +29,7 @@ export interface TopbarProps {
   onSwitchUser?: () => void;
   className?: string;
   activeNavId?: string;
-  planCode?: 'FREE' | 'PRO';
+  planCode?: 'FREE' | 'PRO' | null;
   onNavigateToSubscription?: () => void;
 }
 
@@ -47,7 +47,7 @@ export const Topbar: React.FC<TopbarProps> = ({
   onSwitchUser,
   className = '',
   activeNavId,
-  planCode = 'FREE',
+  planCode = null,
   onNavigateToSubscription,
 }) => {
   const { theme, toggleTheme } = useTheme();
@@ -114,7 +114,7 @@ export const Topbar: React.FC<TopbarProps> = ({
           >
             Plan Pro
           </Button>
-        ) : (
+        ) : planCode === 'FREE' ? (
           <Button
             variant="brand"
             size="sm"
@@ -125,6 +125,10 @@ export const Topbar: React.FC<TopbarProps> = ({
             aria-current={isSubscriptionActive ? 'page' : undefined}
           >
             Actualizar a Pro
+          </Button>
+        ) : (
+          <Button variant="secondary" size="sm" disabled aria-label="Verificando plan" className="hidden sm:inline-flex rounded-full text-xs">
+            Verificando plan
           </Button>
         )}
 

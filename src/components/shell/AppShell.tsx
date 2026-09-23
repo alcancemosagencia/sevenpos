@@ -14,7 +14,7 @@ export interface AppShellProps {
   onOpenSettings?: () => void;
   onLogout?: () => void;
   onSwitchUser?: () => void;
-  planCode?: 'FREE' | 'PRO';
+  planCode?: 'FREE' | 'PRO' | null;
   onNavigateToSubscription?: () => void;
 }
 
@@ -30,7 +30,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   onOpenSettings,
   onLogout,
   onSwitchUser,
-  planCode = 'FREE',
+  planCode = null,
   onNavigateToSubscription,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {

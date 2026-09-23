@@ -13,8 +13,9 @@ import { AuditEventDetailModal } from '../features/audit/components/AuditEventDe
 import { ExportAuditCsvModal } from '../features/audit/components/ExportAuditCsvModal';
 import { resolveDateRange } from '../application/analytics/DateRangeUtils';
 import { DateRange } from '../application/analytics/types';
-import { DateRangeSelectorPreset } from '../components/ui/DateRangeSelector';
 import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
+import { useResolvedEntitlement } from '../application/subscription/useResolvedEntitlement';
+import { entitlementDatePresets } from '../application/subscription/EntitlementDatePresets';
 
 export interface AuditPageProps {
   onNavigateToSubscription?: () => void;
@@ -26,7 +27,8 @@ export const AuditPage: React.FC<AuditPageProps> = ({
   const { businessId } = useAuth();
 
   // Subscription state
-  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'PRO'>('FREE');
+  const [planReload, setPlanReload] = useState(0);
+  const entitlement = useResolvedEntitlement(businessId, String(planReload));
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState<string | undefined>(undefined);
 
@@ -86,16 +88,13 @@ export const AuditPage: React.FC<AuditPageProps> = ({
   }, [activeTab, selectedCategory, selectedSeverity, searchTerm, dateRange, limit, offset]);
 
   const loadData = useCallback(async () => {
+    setPlanReload((value) => value + 1);
     if (!businessId) {
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     try {
-      const subRepo = repositoryFactory.getSubscriptionRepository();
-      const sub = await subRepo.getSubscription(businessId);
-      setCurrentPlan(sub.plan);
-
       const auditService = repositoryFactory.getAuditService();
       const [queryResult, kpiResult] = await Promise.all([
         auditService.queryEvents(businessId, activeFilters),
@@ -179,42 +178,13 @@ export const AuditPage: React.FC<AuditPageProps> = ({
     );
   }
 
-  const auditPresets: DateRangeSelectorPreset[] = [
-    { key: 'TODAY', label: 'Hoy' },
-    { key: 'YESTERDAY', label: 'Ayer' },
-    {
-      key: 'LAST_7_DAYS',
-      label: 'Últimos 7 días',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'LAST_30_DAYS',
-      label: 'Últimos 30 días',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'THIS_MONTH',
-      label: 'Este mes',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'LAST_MONTH',
-      label: 'Mes anterior',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'CUSTOM',
-      label: 'Personalizado',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-  ];
+  const auditPresets = entitlementDatePresets('audit', entitlement);
 
   const handleLockedPresetSelect = () => {
+    if (entitlement.plan !== 'FREE') {
+      showToast('No pudimos verificar tu plan. Reintenta cuando vuelva la conexión.');
+      return;
+    }
     setUpgradeModalMessage('El Plan Pro desbloquea el histórico completo de auditoría y eventos de seguridad sin límites.');
     setIsUpgradeModalOpen(true);
   };

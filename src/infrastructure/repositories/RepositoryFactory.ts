@@ -601,15 +601,19 @@ export class RepositoryFactory {
     if (this.subscriptionRepo) {
       return this.subscriptionRepo;
     }
-    // Cloud-first: if Supabase is configured, use CloudSubscriptionRepository.
-    // It falls back to FREE safely if cloud is unreachable.
-    // InMemory is used only when Supabase env is absent (pure offline dev).
+    // Unit tests use explicit local fixtures rather than accidentally querying
+    // a configured hosted project through the developer's .env file.
+    if (import.meta.env?.MODE === 'test') {
+      this.subscriptionRepo = inMemorySubscriptionRepository;
+      return this.subscriptionRepo;
+    }
+    // Cloud-first in the app; unresolved cloud state is not confirmed FREE.
     const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL;
     const supabaseKey =
       import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ||
       import.meta.env?.VITE_SUPABASE_ANON_KEY; // VITE_SUPABASE_ANON_KEY: legacy backward-compatible fallback only
     if (supabaseUrl && supabaseKey) {
-      logger.info('RepositoryFactory', 'Instantiating CloudSubscriptionRepository (cloud-first, FREE fallback)');
+      logger.info('RepositoryFactory', 'Instantiating CloudSubscriptionRepository (cloud-first)');
       this.subscriptionRepo = new CloudSubscriptionRepository();
     } else {
       logger.info('RepositoryFactory', 'Instantiating InMemorySubscriptionRepository (no Supabase config)');
@@ -639,5 +643,4 @@ export class RepositoryFactory {
 }
 
 export const repositoryFactory = new RepositoryFactory();
-
 

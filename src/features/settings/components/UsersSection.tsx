@@ -188,7 +188,8 @@ export const UsersSection: React.FC<UsersSectionProps> = ({
       const entitlementService = repositoryFactory.getEntitlementService();
       const decision = await entitlementService.checkLimit(currentBusinessId, 'users.active_operators');
       if (!decision.allowed) {
-        setIsUpgradeModalOpen(true);
+        if (decision.reason === 'ENTITLEMENT_UNAVAILABLE') setLoadError(decision.message || 'No pudimos verificar tu plan.');
+        else setIsUpgradeModalOpen(true);
         return { success: false, error: decision.message || 'Límite de usuarios alcanzado' };
       }
     }
@@ -215,7 +216,8 @@ export const UsersSection: React.FC<UsersSectionProps> = ({
     const entitlementService = repositoryFactory.getEntitlementService();
     const decision = await entitlementService.checkLimit(currentBusinessId, 'users.active_operators');
     if (!decision.allowed) {
-      setIsUpgradeModalOpen(true);
+      if (decision.reason === 'ENTITLEMENT_UNAVAILABLE') setLoadError(decision.message || 'No pudimos verificar tu plan.');
+      else setIsUpgradeModalOpen(true);
       return;
     }
     setIsCreateOpen(true);

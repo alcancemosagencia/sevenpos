@@ -10,11 +10,13 @@ import { AnalyticsKpiCard } from '../components/analytics/AnalyticsKpiCard';
 import { SimpleBarChart } from '../components/analytics/SimpleBarChart';
 import { SimpleAreaChart } from '../components/analytics/SimpleAreaChart';
 import { DistributionBar } from '../components/analytics/DistributionBar';
-import { DateRangeSelector, DateRangeSelectorPreset } from '../components/ui/DateRangeSelector';
+import { DateRangeSelector } from '../components/ui/DateRangeSelector';
 import { ExportCsvModal } from '../components/analytics/ExportCsvModal';
 import { ReportsTabs, ReportTabKey } from '../components/analytics/ReportsTabs';
 import { UpgradePromptModal } from '../components/subscription/UpgradePromptModal';
-import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
+import { useResolvedEntitlement } from '../application/subscription/useResolvedEntitlement';
+import { entitlementDatePresets } from '../application/subscription/EntitlementDatePresets';
+import { useAuth } from '../context/AuthContext';
 import {
   TrendingUp,
   DollarSign,
@@ -44,10 +46,11 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   onNavigateToSubscription,
 }) => {
   const businessId = 'primary-business';
+  const { businessId: activeBusinessId } = useAuth();
+  const [planReload, setPlanReload] = useState(0);
+  const entitlement = useResolvedEntitlement(activeBusinessId || businessId, String(planReload));
   const { countryCode, country } = useCountry();
 
-  // Subscription state
-  const [currentPlan, setCurrentPlan] = useState<'FREE' | 'PRO'>('FREE');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState<string | undefined>(undefined);
 
@@ -80,13 +83,10 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
   }, [country.primaryCurrency.code]);
 
   const loadData = useCallback(async () => {
+    setPlanReload((value) => value + 1);
     try {
       setLoading(true);
       setLoadError(false);
-      const subRepo = repositoryFactory.getSubscriptionRepository();
-      const sub = await subRepo.getSubscription(businessId);
-      setCurrentPlan(sub.plan);
-
       const [sum, sls, inv, fin, cust] = await Promise.all([
         operationalAnalyticsService.getExecutiveSummary(businessId, effectiveDateRange),
         operationalAnalyticsService.getSalesAnalytics(businessId, effectiveDateRange),
@@ -154,37 +154,13 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     };
   }, [businessId, effectiveDateRange]);
 
-  const reportPresets: DateRangeSelectorPreset[] = [
-    { key: 'TODAY', label: 'Hoy' },
-    { key: 'YESTERDAY', label: 'Ayer' },
-    { key: 'LAST_7_DAYS', label: 'Últimos 7 días' },
-    {
-      key: 'LAST_30_DAYS',
-      label: 'Últimos 30 días',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'THIS_MONTH',
-      label: 'Este mes',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'LAST_MONTH',
-      label: 'Mes anterior',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-    {
-      key: 'CUSTOM',
-      label: 'Personalizado',
-      locked: currentPlan === 'FREE',
-      badge: currentPlan === 'FREE' ? 'PRO' : undefined,
-    },
-  ];
+  const reportPresets = entitlementDatePresets('reports', entitlement);
 
   const handleLockedPresetSelect = () => {
+    if (entitlement.plan !== 'FREE') {
+      showToast('No pudimos verificar tu plan. Reintenta cuando vuelva la conexión.');
+      return;
+    }
     setUpgradeModalMessage('El Plan Pro desbloquea el histórico completo de reportes comerciales e inteligencia.');
     setIsUpgradeModalOpen(true);
   };

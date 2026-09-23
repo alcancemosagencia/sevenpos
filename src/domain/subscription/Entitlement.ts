@@ -3,6 +3,7 @@ import { PlanCode, EntitlementKey, LimitKey, MetricKey } from './Plan';
 export type LimitValue = number | 'UNLIMITED';
 
 export type UpgradeReason =
+  | 'ENTITLEMENT_UNAVAILABLE'
   | 'PLAN_REQUIRED'
   | 'LIMIT_REACHED'
   | 'SAFETY_CEILING_REACHED'

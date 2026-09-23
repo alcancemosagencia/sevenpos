@@ -129,6 +129,10 @@ export const CustomersPage: React.FC<CustomersPageProps> = ({
     const entitlementService = repositoryFactory.getEntitlementService();
     const decision = await entitlementService.checkLimit(businessId, 'customers.active');
     if (!decision.allowed) {
+      if (decision.reason === 'ENTITLEMENT_UNAVAILABLE') {
+        showToast(decision.message || 'No pudimos verificar tu plan.');
+        return;
+      }
       setIsUpgradeModalOpen(true);
       return;
     }

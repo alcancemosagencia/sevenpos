@@ -12,6 +12,7 @@ import { EntitlementDecision } from '../../domain/subscription/Entitlement';
 import { ISubscriptionRepository } from '../../domain/subscription/SubscriptionRepository';
 import { IUsageService } from './IUsageService';
 import { DateRange } from '../analytics/types';
+import { EntitlementUnavailableError, isConfirmedEntitlement } from '../../domain/subscription/SubscriptionResolution';
 
 export class EntitlementService implements IEntitlementService {
   constructor(
@@ -21,11 +22,15 @@ export class EntitlementService implements IEntitlementService {
 
   async getPlan(businessId: string): Promise<PlanDefinition> {
     const sub = await this.subscriptionRepo.getSubscription(businessId);
+    if (!isConfirmedEntitlement(sub)) throw new EntitlementUnavailableError(sub.resolutionReason);
     return PLAN_DEFINITIONS[sub.plan];
   }
 
   async can(businessId: string, key: EntitlementKey | RoadmapFeatureKey | string): Promise<EntitlementDecision> {
     const sub = await this.subscriptionRepo.getSubscription(businessId);
+    if (!isConfirmedEntitlement(sub)) {
+      return { allowed: false, reason: 'ENTITLEMENT_UNAVAILABLE', message: 'No pudimos verificar tu plan.' };
+    }
     const planDef = PLAN_DEFINITIONS[sub.plan];
 
     // Exports are always allowed on both plans
@@ -59,6 +64,7 @@ export class EntitlementService implements IEntitlementService {
 
   async getLimit(businessId: string, key: LimitKey | string): Promise<EntitlementLimitInfo> {
     const sub = await this.subscriptionRepo.getSubscription(businessId);
+    if (!isConfirmedEntitlement(sub)) throw new EntitlementUnavailableError(sub.resolutionReason);
     const planDef = PLAN_DEFINITIONS[sub.plan];
 
     if (key === 'pos.monthly_sales' || key === 'sales.monthly_completed') {
@@ -87,6 +93,14 @@ export class EntitlementService implements IEntitlementService {
 
   async checkLimit(businessId: string, key: LimitKey | string): Promise<EntitlementDecision & { status?: string }> {
     const sub = await this.subscriptionRepo.getSubscription(businessId);
+    if (!isConfirmedEntitlement(sub)) {
+      return {
+        allowed: false,
+        reason: 'ENTITLEMENT_UNAVAILABLE',
+        limitKey: key as LimitKey,
+        message: 'No pudimos verificar tu plan. Comprueba tu conexión e inténtalo nuevamente.',
+      };
+    }
     const planDef = PLAN_DEFINITIONS[sub.plan];
 
     if (key === 'pos.monthly_sales' || key === 'sales.monthly_completed') {
@@ -174,6 +188,7 @@ export class EntitlementService implements IEntitlementService {
     requestedRange: DateRange
   ): Promise<DateRangeConstraintResult> {
     const sub = await this.subscriptionRepo.getSubscription(businessId);
+    if (!isConfirmedEntitlement(sub)) throw new EntitlementUnavailableError(sub.resolutionReason);
     const planDef = PLAN_DEFINITIONS[sub.plan];
 
     const maxDays =

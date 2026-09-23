@@ -4,7 +4,7 @@ import { PageHeader } from '../components/shell/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { UsageOverview } from '../domain/subscription/Entitlement';
-import { PlanCode } from '../domain/subscription/Plan';
+import { useResolvedEntitlement } from '../application/subscription/useResolvedEntitlement';
 import { repositoryFactory } from '../infrastructure/repositories/RepositoryFactory';
 import { getSupabaseClient } from '../infrastructure/cloud/supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -48,11 +48,16 @@ function formatCLP(amount: number): string {
 export const SubscriptionPage: React.FC = () => {
   const { businessId, activeBusinessName, reauthenticateOwnerForBilling } = useAuth();
   const currentBusinessId = businessId || 'primary-business';
+  const [entitlementRefresh, setEntitlementRefresh] = useState(0);
+  const entitlement = useResolvedEntitlement(currentBusinessId, String(entitlementRefresh));
   const { country } = useCountry();
   const billingCapability = getBillingCapability(country?.countryCode);
 
   const [overview, setOverview] = useState<UsageOverview | null>(null);
   const [subStatus, setSubStatus] = useState<SubscriptionStatusResponse | null>(null);
+  const [loadedBusinessId, setLoadedBusinessId] = useState<string | null>(null);
+  const visibleOverview = loadedBusinessId === currentBusinessId ? overview : null;
+  const visibleSubStatus = loadedBusinessId === currentBusinessId ? subStatus : null;
   const [isLoading, setIsLoading] = useState(true);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -82,6 +87,7 @@ export const SubscriptionPage: React.FC = () => {
   const usageService = repositoryFactory.getUsageService();
 
   const handleRefresh = useCallback(async () => {
+    setEntitlementRefresh((value) => value + 1);
     try {
       setIsLoading(true);
       const [overviewData, statusData] = await Promise.all([
@@ -90,6 +96,7 @@ export const SubscriptionPage: React.FC = () => {
       ]);
       setOverview(overviewData);
       if (statusData) setSubStatus(statusData);
+      setLoadedBusinessId(currentBusinessId);
     } catch (err) {
       console.error('Failed to load subscription overview:', err);
     } finally {
@@ -107,6 +114,7 @@ export const SubscriptionPage: React.FC = () => {
         if (isMounted) {
           setOverview(overviewData);
           if (statusData) setSubStatus(statusData);
+          setLoadedBusinessId(currentBusinessId);
           setIsLoading(false);
         }
       })
@@ -359,8 +367,7 @@ export const SubscriptionPage: React.FC = () => {
     }
   };
 
-  const currentPlanCode: PlanCode = overview?.plan || 'FREE';
-  const isPro = currentPlanCode === 'PRO';
+  const isPro = entitlement.plan === 'PRO';
 
   return (
     <PageContainer>
@@ -381,6 +388,14 @@ export const SubscriptionPage: React.FC = () => {
             </Button>
           }
         />
+
+        {entitlement.plan === null && (
+          <p role="status" className="text-sm text-text-secondary">
+            {entitlement.state === 'HYDRATING'
+              ? 'Verificando tu plan…'
+              : 'No pudimos verificar tu plan. Comprueba tu conexión e inténtalo nuevamente.'}
+          </p>
+        )}
 
         {/* Toast */}
         {toastMessage && (
@@ -416,7 +431,7 @@ export const SubscriptionPage: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {!cancelScheduled && !subStatus?.cancelAtPeriodEnd ? (
+                {!cancelScheduled && !visibleSubStatus?.cancelAtPeriodEnd ? (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -440,17 +455,17 @@ export const SubscriptionPage: React.FC = () => {
               <div className="p-3.5 rounded-2xl bg-surface-secondary border border-border-subtle">
                 <p className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider mb-1">Período de cobro</p>
                 <p className="text-sm font-bold text-text-primary">
-                  {subStatus?.billingInterval === 'ANNUAL' ? 'Anual' : 'Mensual'}
+                  {visibleSubStatus?.billingInterval === 'ANNUAL' ? 'Anual' : 'Mensual'}
                 </p>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-surface-secondary border border-border-subtle">
                 <p className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider mb-1">
-                  {cancelScheduled || subStatus?.cancelAtPeriodEnd ? 'Acceso hasta' : 'Próxima renovación'}
+                  {cancelScheduled || visibleSubStatus?.cancelAtPeriodEnd ? 'Acceso hasta' : 'Próxima renovación'}
                 </p>
                 <p className="text-sm font-bold text-text-primary">
-                  {subStatus?.currentPeriodEnd
-                    ? new Date(subStatus.currentPeriodEnd).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
+                  {visibleSubStatus?.currentPeriodEnd
+                    ? new Date(visibleSubStatus.currentPeriodEnd).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
                     : 'Renovación automática'}
                 </p>
               </div>
@@ -458,7 +473,7 @@ export const SubscriptionPage: React.FC = () => {
               <div className="p-3.5 rounded-2xl bg-surface-secondary border border-border-subtle">
                 <p className="text-[11px] font-bold text-text-tertiary uppercase tracking-wider mb-1">Promoción aplicada</p>
                 <p className="text-sm font-bold text-brand-primary">
-                  {subStatus?.promotionCode === 'FOUNDERS_50' ? 'Precio Fundadores' : 'Tarifa estándar'}
+                  {visibleSubStatus?.promotionCode === 'FOUNDERS_50' ? 'Precio Fundadores' : 'Tarifa estándar'}
                 </p>
               </div>
             </div>
@@ -466,7 +481,7 @@ export const SubscriptionPage: React.FC = () => {
         )}
 
         {/* 2. PRICING & PLAN COMPARISON — FREE USERS (Side-by-Side on Desktop) */}
-        {!isPro && (
+        {entitlement.plan === 'FREE' && (
           <>
             <div className="text-center pt-2 space-y-1.5 px-2">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-secondary text-text-secondary text-xs font-bold border border-border-subtle max-w-full">
@@ -891,8 +906,8 @@ export const SubscriptionPage: React.FC = () => {
         )}
 
         {/* 3. USAGE METERS */}
-        {overview && (
-          <UsageMeterCard overview={overview} onUpgradeClick={() => setIsUpgradeModalOpen(true)} />
+        {visibleOverview && entitlement.plan === visibleOverview.plan && (
+          <UsageMeterCard overview={visibleOverview} onUpgradeClick={() => setIsUpgradeModalOpen(true)} />
         )}
 
         {/* 4. PLAN COMPARISON TABLE */}

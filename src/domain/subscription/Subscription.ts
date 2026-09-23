@@ -29,6 +29,8 @@ export interface Subscription {
   cancelAtPeriodEnd?: boolean;
   /** ISO 8601 end of current billing period (if known) */
   periodEnd?: string | null;
+  /** Server-owned source; informational only, never used to infer entitlement. */
+  billingSource?: string | null;
 }
 
 /**
