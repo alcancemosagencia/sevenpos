@@ -269,7 +269,6 @@ export const SubscriptionPage: React.FC = () => {
         planId,
         billingInterval: selectedInterval,
         couponCode: pricePreview.appliedPromotionCode || undefined,
-        returnOrigin: typeof window === 'undefined' ? undefined : window.location.origin,
       });
 
       // CHECKOUT CONSISTENCY INVARIANT:

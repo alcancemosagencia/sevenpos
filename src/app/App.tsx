@@ -11,7 +11,6 @@ import { PlaceholderPage } from '../pages/PlaceholderPage';
 import { OnboardingFlow } from '../features/onboarding/OnboardingFlow';
 import { PinLoginPage } from '../features/auth/PinLoginPage';
 import { AccountLoginPage } from '../features/auth/AccountLoginPage';
-import { PasswordRecoveryPage } from '../features/auth/PasswordRecoveryPage';
 import { RegisterAccountPage } from '../features/auth/RegisterAccountPage';
 import { VerifyEmailPage } from '../features/auth/VerifyEmailPage';
 import { BusinessSetupPage } from '../features/auth/BusinessSetupPage';
@@ -28,29 +27,17 @@ import { syncBrowserUrl, normalizeProtectedPath, resolveEntryRoute, AppRoute } f
 import { Activity, WifiOff, AlertTriangle, RotateCcw, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { PlatformApp } from '../platform/PlatformApp';
-import { MarketingRoutePage } from '../marketing/pages/MarketingRoutePage';
-import { canonicalWwwRedirect, legacyCustomerRedirect, resolveAppHost } from './hostRouting';
-
-const marketingRootEnabled = import.meta.env.VITE_MARKETING_ROOT_ENABLED === 'true';
-
-function currentAppHost() {
-  if (typeof window === 'undefined') return 'customer';
-  return resolveAppHost(window.location.hostname, window.location.pathname, window.location.search, marketingRootEnabled);
-}
-
-function LegacyHostRedirect({ destination }: { destination: string }) {
-  useEffect(() => {
-    window.location.replace(destination);
-  }, [destination]);
-  return null;
-}
 
 export function isPlatformHost(): boolean {
-  return currentAppHost() === 'platform';
-}
-
-export function isMarketingRoute(): boolean {
-  return currentAppHost() === 'marketing';
+  if (typeof window === 'undefined') return false;
+  const hostname = window.location.hostname.toLowerCase();
+  const pathname = window.location.pathname.toLowerCase();
+  return (
+    hostname.startsWith('platform.') ||
+    hostname === 'platform.sevenpos.pro' ||
+    pathname.startsWith('/platform') ||
+    window.location.search.includes('__platform=1')
+  );
 }
 
 import { ProductsListPage } from '../pages/ProductsListPage';
@@ -977,36 +964,10 @@ const AppRoot: React.FC = () => {
 };
 
 export const App: React.FC = () => {
-  if (typeof window !== 'undefined') {
-    const { hostname, pathname, search } = window.location;
-    if (
-      pathname === '/auth/reset-password' &&
-      (hostname === 'app.sevenpos.pro' || hostname === 'sevenpos.pro' || hostname === 'www.sevenpos.pro' || hostname === 'localhost' || hostname === '127.0.0.1' || hostname === 'app.localhost')
-    ) {
-      return <PasswordRecoveryPage />;
-    }
-    const destination = marketingRootEnabled
-      ? legacyCustomerRedirect(hostname, pathname, search) ?? canonicalWwwRedirect(hostname, pathname, search)
-      : null;
-    if (destination) return <LegacyHostRedirect destination={destination} />;
-  }
-
   if (isPlatformHost()) {
     return (
       <ErrorBoundary>
         <PlatformApp />
-      </ErrorBoundary>
-    );
-  }
-
-  if (isMarketingRoute()) {
-    return (
-      <ErrorBoundary>
-        <ThemeProvider>
-          <CountryProvider>
-            <MarketingRoutePage />
-          </CountryProvider>
-        </ThemeProvider>
       </ErrorBoundary>
     );
   }
@@ -1027,3 +988,4 @@ export const App: React.FC = () => {
 };
 
 export default App;
+

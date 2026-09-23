@@ -1,20 +1,28 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { billingCorsHeaders, billingPreflightResponse, isAllowedBillingOrigin } from '../_shared/billingCors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-Deno.serve(async (req: Request) => {
-  const origin = req.headers.get('Origin');
-  const corsHeaders = billingCorsHeaders(origin);
-  const jsonResponse = (data: unknown, status = 200): Response => new Response(JSON.stringify(data), {
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+    },
   });
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
-    return billingPreflightResponse(origin, corsHeaders);
+    return new Response('ok', { headers: corsHeaders });
   }
-  if (!isAllowedBillingOrigin(origin)) return jsonResponse({ error: 'ORIGIN_NOT_ALLOWED' }, 403);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const authHeader = req.headers.get('Authorization');

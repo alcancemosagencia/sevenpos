@@ -12,7 +12,6 @@ export interface CreateBillingIntentRequest {
   planId: 'pro_monthly' | 'pro_annual';
   billingInterval: BillingInterval;
   couponCode?: string;
-  returnOrigin?: string;
 }
 
 export interface BillingIntentResponse {

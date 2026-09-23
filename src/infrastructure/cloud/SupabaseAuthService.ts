@@ -8,7 +8,6 @@ import {
   SignUpParams,
 } from '../../domain/auth/CloudAuthService';
 import { DeviceType } from '../../domain/auth/DeviceEnrollment';
-import { authRedirectOrigin } from './authRedirectOrigin';
 
 export class SupabaseAuthService implements CloudAuthService {
   constructor(private client: SupabaseClient) {}
@@ -51,10 +50,6 @@ export class SupabaseAuthService implements CloudAuthService {
       email: params.email.trim(),
       password: params.password,
       options: {
-        emailRedirectTo: `${authRedirectOrigin(
-          typeof window === 'undefined' ? '' : window.location.hostname,
-          typeof window === 'undefined' ? '' : window.location.origin
-        )}/auth/callback`,
         data: {
           first_name: params.firstName.trim(),
           last_name: params.lastName ? params.lastName.trim() : '',
@@ -127,12 +122,6 @@ export class SupabaseAuthService implements CloudAuthService {
     const { error } = await this.client.auth.resend({
       type: 'signup',
       email: email.trim(),
-      options: {
-        emailRedirectTo: `${authRedirectOrigin(
-          typeof window === 'undefined' ? '' : window.location.hostname,
-          typeof window === 'undefined' ? '' : window.location.origin
-        )}/auth/callback`,
-      },
     });
     if (error) {
       const lower = (error.message || '').toLowerCase();
@@ -145,10 +134,7 @@ export class SupabaseAuthService implements CloudAuthService {
 
   async sendPasswordReset(email: string): Promise<void> {
     const { error } = await this.client.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${authRedirectOrigin(
-        typeof window === 'undefined' ? '' : window.location.hostname,
-        typeof window === 'undefined' ? '' : window.location.origin
-      )}/auth/reset-password`,
+      redirectTo: 'https://sevenpos.pro/auth/reset-password',
     });
     if (error) {
       throw error;

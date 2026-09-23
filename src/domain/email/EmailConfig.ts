@@ -15,7 +15,7 @@
 export const EMAIL_CONFIG = {
   DOMAIN: 'sevenpos.pro',
   AUTH_DOMAIN: 'auth.sevenpos.pro',
-  CANONICAL_APP_URL: 'https://app.sevenpos.pro',
+  CANONICAL_APP_URL: 'https://sevenpos.pro',
   
   // Transactional Auth Sender Identity (Supabase Auth SMTP)
   TRANSACTIONAL: {
