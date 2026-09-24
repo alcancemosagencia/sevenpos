@@ -1,27 +1,13 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { billingCorsHeaders, billingPreflightResponse, isAllowedBillingOrigin } from '../_shared/billingCors.ts';
+import { resolveBillingReturnUrl } from '../_shared/billingReturnOrigin.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')!;
-const APP_URL = Deno.env.get('APP_URL') ?? 'https://sevenpos.pro';
+const APP_URL = Deno.env.get('APP_URL') ?? 'https://app.sevenpos.pro';
 // PRICING_VERSION is embedded in billing_contracts rows inserted by this function
 export const PRICING_VERSION = '2026.1_LAUNCH';
-
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-};
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-  });
-}
 
 interface PromoRow {
   id: string;
@@ -48,9 +34,16 @@ function calcTax(net: number): { taxAmount: number; grossAmount: number } {
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = billingCorsHeaders(origin);
+  const jsonResponse = (data: unknown, status = 200): Response => new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return billingPreflightResponse(origin, corsHeaders);
   }
+  if (!isAllowedBillingOrigin(origin)) return jsonResponse({ error: 'ORIGIN_NOT_ALLOWED' }, 403);
 
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
@@ -242,19 +235,7 @@ Deno.serve(async (req: Request) => {
   const tokenMode = isTest ? 'TEST' : 'PRODUCTION';
   const effectivePayerEmail = testPayerEmail || user.email;
 
-  const rawBackUrl = body.backUrl;
-  let backUrl = `${APP_URL}/subscription/return`;
-  if (rawBackUrl && typeof rawBackUrl === 'string') {
-    try {
-      const parsedUrl = new URL(rawBackUrl);
-      const allowedOrigins = ['https://sevenpos.pro', 'https://www.sevenpos.pro', 'http://localhost:5173', 'http://127.0.0.1:5173'];
-      if (allowedOrigins.includes(parsedUrl.origin) && parsedUrl.pathname.startsWith('/subscription/return')) {
-        backUrl = rawBackUrl;
-      }
-    } catch {
-      // Fallback to APP_URL
-    }
-  }
+  const backUrl = resolveBillingReturnUrl(body.returnOrigin, origin, APP_URL);
 
   const frequency = billingInterval === 'MONTHLY' ? 1 : 12;
 

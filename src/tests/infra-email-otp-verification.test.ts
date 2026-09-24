@@ -131,7 +131,7 @@ describe('INFRA-EMAIL-01 — SevenPOS Transactional Email System Verification', 
     it('defines canonical transactional sender on dedicated auth subdomain as cuenta@auth.sevenpos.pro', () => {
       expect(EMAIL_CONFIG.DOMAIN).toBe('sevenpos.pro');
       expect(EMAIL_CONFIG.AUTH_DOMAIN).toBe('auth.sevenpos.pro');
-      expect(EMAIL_CONFIG.CANONICAL_APP_URL).toBe('https://sevenpos.pro');
+      expect(EMAIL_CONFIG.CANONICAL_APP_URL).toBe('https://app.sevenpos.pro');
       expect(EMAIL_CONFIG.TRANSACTIONAL.SENDER_EMAIL).toBe('cuenta@auth.sevenpos.pro');
       expect(EMAIL_CONFIG.TRANSACTIONAL.SENDER_NAME).toBe('SevenPOS');
       expect(EMAIL_CONFIG.TRANSACTIONAL.REPLY_TO).toBe('soporte@sevenpos.pro');

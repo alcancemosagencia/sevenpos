@@ -1,15 +1,11 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { billingCorsHeaders, billingPreflightResponse, isAllowedBillingOrigin } from '../_shared/billingCors.ts';
+import { isActiveManualPro, isAuthorizedBillingScheduler } from '../_shared/billingReconcilePolicy.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')!;
 export const PRICING_VERSION = '2026.1_LAUNCH';
-
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret, x-admin-action, x-preapproval-id',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-};
 
 const MP_STATUS_MAP: Record<string, string> = {
   pending: 'PENDING',
@@ -19,19 +15,10 @@ const MP_STATUS_MAP: Record<string, string> = {
   expired: 'EXPIRED',
 };
 
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-  });
-}
-
 async function reconcilePreapproval(
   supabase: ReturnType<typeof createClient>,
-  preapprovalId: string
+  preapprovalId: string,
+  expectedBusinessId?: string,
 ) {
   const mpHeaders: Record<string, string> = {
     Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
@@ -91,6 +78,9 @@ async function reconcilePreapproval(
   }
 
   const businessId = intent.business_id;
+  if (expectedBusinessId && businessId !== expectedBusinessId) {
+    return { success: false, error: 'INTENT_BUSINESS_MISMATCH' };
+  }
 
   // Resolve promotion details if any
   let promoCode: string | null = null;
@@ -126,9 +116,22 @@ async function reconcilePreapproval(
   // Check if business_subscriptions row exists
   const { data: existingSub } = await supabase
     .from('business_subscriptions')
-    .select('id, status, plan_code, active_contract_id')
+    .select('id, status, plan_code, active_contract_id, billing_source, mp_preapproval_id')
     .eq('business_id', businessId)
     .maybeSingle();
+
+  // An old MP intent must never downgrade or replace a manually activated PRO.
+  if (isActiveManualPro(existingSub)) {
+    return { success: false, error: 'MANUAL_PRO_PRESERVED' };
+  }
+  if (existingSub?.status === 'ACTIVE' && existingSub.plan_code === 'PRO' &&
+    existingSub.billing_source !== 'MERCADO_PAGO' && existingSub.billing_source !== 'NONE') {
+    return { success: false, error: 'NON_MP_PRO_PRESERVED' };
+  }
+  if (existingSub?.status === 'ACTIVE' && existingSub.mp_preapproval_id &&
+    existingSub.mp_preapproval_id !== preapprovalId) {
+    return { success: false, error: 'DIFFERENT_ACTIVE_PREAPPROVAL' };
+  }
 
   let subscriptionId: string;
 
@@ -138,6 +141,7 @@ async function reconcilePreapproval(
       .from('business_subscriptions')
       .update({
         plan_code: planCode,
+        billing_source: 'MERCADO_PAGO',
         billing_interval: billingInterval,
         status: sevenposStatus,
         mp_preapproval_id: String(mpData.id),
@@ -154,6 +158,7 @@ async function reconcilePreapproval(
       .insert({
         business_id: businessId,
         plan_code: planCode,
+        billing_source: 'MERCADO_PAGO',
         billing_interval: billingInterval,
         status: sevenposStatus,
         mp_preapproval_id: String(mpData.id),
@@ -198,6 +203,7 @@ async function reconcilePreapproval(
         tax_amount: intent.tax_amount,
         final_gross_amount: intent.final_gross_amount,
         currency: 'CLP',
+        billing_source: 'MERCADO_PAGO',
         promotion_code: promoCode,
         promotion_type: promoType,
         promotion_duration_type: promoDurationType,
@@ -222,21 +228,23 @@ async function reconcilePreapproval(
     }
   }
 
-  // Insert subscription_event
-  await supabase.from('subscription_events').insert({
-    business_id: businessId,
-    subscription_id: subscriptionId,
-    event_type: sevenposStatus === 'ACTIVE' ? 'SUBSCRIPTION_ACTIVATED' : 'SUBSCRIPTION_RECONCILED',
-    previous_status: existingSub?.status ?? null,
-    new_status: sevenposStatus,
-    metadata: {
-      mp_preapproval_id: String(mpData.id),
-      mp_status: mpStatus,
-      transaction_amount: transactionAmount,
-      contract_id: contractId,
-      source: 'RECONCILIATION',
-    },
-  });
+  // Repeated polling must not append duplicate state-transition events.
+  if (!existingSub || existingSub.status !== sevenposStatus || existingSub.plan_code !== planCode) {
+    await supabase.from('subscription_events').insert({
+      business_id: businessId,
+      subscription_id: subscriptionId,
+      event_type: sevenposStatus === 'ACTIVE' ? 'SUBSCRIPTION_ACTIVATED' : 'SUBSCRIPTION_RECONCILED',
+      previous_status: existingSub?.status ?? null,
+      new_status: sevenposStatus,
+      metadata: {
+        mp_preapproval_id: String(mpData.id),
+        mp_status: mpStatus,
+        transaction_amount: transactionAmount,
+        contract_id: contractId,
+        source: 'RECONCILIATION',
+      },
+    });
+  }
 
   // Record initial payment in subscription_payments if active
   if (sevenposStatus === 'ACTIVE' && transactionAmount > 0) {
@@ -285,12 +293,71 @@ async function reconcilePreapproval(
 }
 
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = billingCorsHeaders(origin, 'authorization, x-client-info, apikey, content-type, x-retry-count, traceparent, tracestate, baggage, x-cron-secret, x-admin-action, x-preapproval-id');
+  const jsonResponse = (data: unknown, status = 200): Response => new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return billingPreflightResponse(origin, corsHeaders);
   }
+  if (!isAllowedBillingOrigin(origin)) return jsonResponse({ error: 'ORIGIN_NOT_ALLOWED' }, 403);
+  if (req.method !== 'POST') return jsonResponse({ error: 'METHOD_NOT_ALLOWED' }, 405);
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const body = await req.json().catch(() => ({}));
+  const authHeader = req.headers.get('Authorization');
+  const cronSecret = req.headers.get('x-cron-secret');
+  const expectedCronSecret = Deno.env.get('CRON_SECRET');
+  const isScheduler = isAuthorizedBillingScheduler(authHeader, cronSecret, expectedCronSecret, SUPABASE_SERVICE_ROLE_KEY);
+
+  if (!isScheduler) {
+    if (!authHeader?.startsWith('Bearer ')) return jsonResponse({ error: 'UNAUTHORIZED' }, 401);
+    const token = authHeader.slice('Bearer '.length);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return jsonResponse({ error: 'UNAUTHORIZED' }, 401);
+
+    const { data: membership, error: membershipError } = await supabase
+      .from('business_memberships')
+      .select('business_id')
+      .eq('user_id', user.id)
+      .eq('role', 'OWNER')
+      .eq('status', 'ACTIVE')
+      .maybeSingle();
+    if (membershipError || !membership) return jsonResponse({ error: 'NOT_OWNER' }, 403);
+
+    const businessId = membership.business_id;
+    const { data: currentSub } = await supabase
+      .from('business_subscriptions')
+      .select('plan_code, status, billing_source')
+      .eq('business_id', businessId)
+      .maybeSingle();
+    if (isActiveManualPro(currentSub)) {
+      return jsonResponse({ success: true, status: 'ACTIVE', planCode: 'PRO', skipped: 'MANUAL_PRO_PRESERVED' });
+    }
+
+    const requestedId = body.preapproval_id;
+    if (requestedId !== undefined && (typeof requestedId !== 'string' || !requestedId)) {
+      return jsonResponse({ error: 'INVALID_PREAPPROVAL_ID' }, 400);
+    }
+    let intentQuery = supabase
+      .from('billing_intents')
+      .select('mp_preapproval_id')
+      .eq('business_id', businessId)
+      .eq('status', 'PROCESSED')
+      .not('mp_preapproval_id', 'is', null);
+    if (requestedId) intentQuery = intentQuery.eq('mp_preapproval_id', requestedId);
+    const { data: intent, error: intentError } = await intentQuery
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (intentError) return jsonResponse({ error: 'INTENT_LOOKUP_FAILED' }, 500);
+    if (!intent?.mp_preapproval_id) return jsonResponse({ error: 'NO_OWNED_INTENT' }, 404);
+
+    const result = await reconcilePreapproval(supabase, intent.mp_preapproval_id, businessId);
+    return jsonResponse(result, result.success ? 200 : 400);
+  }
 
   // Diagnostic / targeted reconciliation by preapproval_id
   const targetPreapprovalId = body.preapproval_id || req.headers.get('x-preapproval-id');

@@ -1,30 +1,22 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { billingCorsHeaders, billingPreflightResponse, isAllowedBillingOrigin } from '../_shared/billingCors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // 48-hour safety buffer before period end — SEVENPOS INTERNAL POLICY (not MP requirement)
 const CANCEL_BUFFER_MS = 48 * 60 * 60 * 1000;
 
-export const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-};
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
-  });
-}
-
 Deno.serve(async (req: Request) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = billingCorsHeaders(origin);
+  const jsonResponse = (data: unknown, status = 200): Response => new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return billingPreflightResponse(origin, corsHeaders);
   }
+  if (!isAllowedBillingOrigin(origin)) return jsonResponse({ error: 'ORIGIN_NOT_ALLOWED' }, 403);
 
   if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 

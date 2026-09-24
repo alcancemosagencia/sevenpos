@@ -19,11 +19,13 @@ type PageState = 'loading' | 'active' | 'pending' | 'failed';
 interface SubscriptionReturnPageProps {
   onNavigateToSubscription?: () => void;
   onNavigateToDashboard?: () => void;
+  onResolved?: (state: 'active' | 'pending' | 'failed') => void;
 }
 
 export const SubscriptionReturnPage: React.FC<SubscriptionReturnPageProps> = ({
   onNavigateToSubscription,
   onNavigateToDashboard,
+  onResolved,
 }) => {
   const [pageState, setPageState] = useState<PageState>('loading');
   const [pollCount, setPollCount] = useState(0);
@@ -46,11 +48,13 @@ export const SubscriptionReturnPage: React.FC<SubscriptionReturnPageProps> = ({
 
         if (status.planCode === 'PRO' && (status.status === 'ACTIVE' || status.status === 'PAST_DUE')) {
           setPageState('active');
+          onResolved?.('active');
           return;
         }
 
         if (status.status === 'EXPIRED') {
           setPageState('failed');
+          onResolved?.('failed');
           return;
         }
 
@@ -63,15 +67,19 @@ export const SubscriptionReturnPage: React.FC<SubscriptionReturnPageProps> = ({
         } else {
           // After max polls, show pending state
           setPageState('pending');
+          onResolved?.('pending');
         }
       } catch {
-        if (!cancelled) setPageState('failed');
+        if (!cancelled) {
+          setPageState('failed');
+          onResolved?.('failed');
+        }
       }
     }
 
     checkCloudState(0);
     return () => { cancelled = true; };
-  }, []);
+  }, [onResolved]);
 
   return (
     <PageContainer>
