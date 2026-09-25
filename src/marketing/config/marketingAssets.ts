@@ -4,6 +4,9 @@ export const marketingAssets = {
     terminal: '/marketing/hero/sevenpos-cafe-terminal.png',
     logo: '/marketing/hero/sevenpos-logo-horizontal.png',
   },
+  brand: {
+  mark: "/marketing/brand/sevenpos-mark.png",
+},
   product: {
     terminal: '/marketing/product/sevenpos-cafe-terminal.png',
     inventory: '/marketing/product/sevenpos-stock-realtime.png',
@@ -16,14 +19,14 @@ export const marketingAssets = {
   },
   businesses: {
     minimarkets: '/marketing/businesses/business-showcase.png',
-    restaurants: '/marketing/businesses/sevenpos-cafe-terminal.png',
+    restaurants: '/marketing/businesses/sevenpos-restaurante-terminal.png',
     cafes: '/marketing/businesses/sevenpos-cafe-terminal.png',
     retail: '/marketing/businesses/sevenpos-stock-realtime.png',
     services: '/marketing/businesses/sevenpos-multidevice.png',
   },
   workflow: {
-    receipt: '/marketing/workflow/sevenpos-thermal-receipt.png',
-  },
+  saleToControl: "/marketing/workflow/sale-to-control.webp",
+},
   finalCta: {
     devices: '/marketing/final-cta/sevenpos-multidevice.png',
   },

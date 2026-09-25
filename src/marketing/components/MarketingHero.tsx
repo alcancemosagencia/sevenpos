@@ -24,7 +24,14 @@ export const MarketingHero: React.FC<MarketingHeroProps> = ({ onRegisterClick })
         <div className="marketing-hero__shade" />
         <div className="marketing-hero__content">
           <nav className="marketing-nav" aria-label="Navegación principal">
-            <a className="marketing-wordmark" href="#top" aria-label="SevenPOS, inicio"><span className="marketing-wordmark__mark">7</span><span>SevenPOS</span></a>
+            <a className="marketing-wordmark" href="#top" aria-label="SevenPOS, inicio">
+  <img
+    src={marketingAssets.brand.mark}
+    alt=""
+    className="marketing-wordmark__mark-image"
+  />
+  <span>SevenPOS</span>
+</a>
             <div className="marketing-nav__links">{navItems.map(([label, href]) => <a href={href} key={label}>{label}</a>)}</div>
             <div className="marketing-nav__actions">
               <a className="marketing-nav__login" href={marketingLinks.appLogin}>Iniciar sesión</a>

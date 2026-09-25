@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Check, ChevronRight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BarChart3, Check, ChevronRight, CreditCard, Package, ScanLine } from 'lucide-react';
 import { MarketingBusinessShowcase } from './MarketingBusinessShowcase';
 import { marketingAssets } from '../config/marketingAssets';
 import { marketingLinks } from '../config/marketingLinks';
@@ -9,6 +9,13 @@ interface Props { onRegisterClick?: () => void }
 const ButtonLink = ({ href, children, light = false, onClick }: { href: string; children: React.ReactNode; light?: boolean; onClick?: (e: React.MouseEvent) => void }) => (
   <a className={`editorial-link ${light ? 'editorial-link--light' : ''}`} href={href} onClick={onClick}>{children}<ArrowRight size={17} /></a>
 );
+
+const workflowSteps = [
+  { icon: ScanLine, title: 'Escanea', detail: 'tu producto' },
+  { icon: CreditCard, title: 'Cobra', detail: 'en segundos' },
+  { icon: Package, title: 'Stock', detail: 'se actualiza' },
+  { icon: BarChart3, title: 'Revisa', detail: 'tus resultados' },
+] as const;
 
 export const MarketingExperience: React.FC<Props> = ({ onRegisterClick }) => {
   const register = (event: React.MouseEvent) => {
@@ -50,8 +57,24 @@ export const MarketingExperience: React.FC<Props> = ({ onRegisterClick }) => {
     </section>
 
     <section id="como-funciona" className="marketing-section workflow-story">
-      <div className="workflow-copy"><p className="section-kicker">Así de simple</p><h2>De la venta<br />al control.</h2><ol>{[['01','Escanea o busca','Encuentra el producto por nombre o código.'],['02','Cobra','Registra el medio de pago en segundos.'],['03','El stock se actualiza','Cada unidad vendida descuenta existencias.'],['04','Revisa tus resultados','Cierra el día con ventas y caja claras.']].map(([n,t,d]) => <li key={n}><span>{n}</span><div><strong>{t}</strong><p>{d}</p></div></li>)}</ol></div>
-      <div className="workflow-visual"><img src={marketingAssets.workflow.receipt} alt="Boleta emitida por SevenPOS después de una venta" loading="lazy" /></div>
+      <div className="workflow-copy">
+        <p className="section-kicker">Así de simple</p>
+        <h2>De la venta<br />al control.</h2>
+        <ol className="workflow-steps">
+          {workflowSteps.map(({ icon: Icon, title, detail }, index) => (
+            <li className="workflow-step" key={title}>
+              <span className="workflow-step__icon"><Icon size={27} strokeWidth={1.65} aria-hidden="true" /></span>
+              <span className="workflow-step__label"><strong>{index + 1}. {title}</strong><span>{detail}</span></span>
+            </li>
+          ))}
+        </ol>
+        <a className="workflow-cta" href={marketingLinks.appRegister} onClick={register}>
+          Empieza gratis <ArrowUpRight size={17} strokeWidth={1.8} aria-hidden="true" />
+        </a>
+      </div>
+      <div className="workflow-visual">
+        <img src={marketingAssets.workflow.saleToControl} alt="SevenPOS acompaña cada venta hasta el control del negocio" loading="lazy" />
+      </div>
     </section>
 
     <MarketingBusinessShowcase />

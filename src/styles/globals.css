@@ -256,6 +256,15 @@ body {
 .marketing-hero__content { position: relative; min-height: inherit; display: flex; flex-direction: column; padding: 20px 24px 28px; }
 .marketing-nav { width: min(100%, 1220px); margin: 0 auto; min-height: 66px; padding: 7px 10px 7px 22px; border-radius: 999px; background: rgba(255,255,255,.96); color: #111; display: flex; align-items: center; justify-content: space-between; gap: 22px; box-shadow: 0 12px 40px rgba(0,0,0,.16); }
 .marketing-wordmark { display: inline-flex; align-items: center; gap: 8px; width: max-content; color: #111; text-decoration: none; font-size: 18px; font-weight: 500; }
+.marketing-wordmark__mark-image {
+  display: block;
+  width: 32px;
+  height: 32px;
+  max-width: 32px;
+  max-height: 32px;
+  object-fit: contain;
+  flex: 0 0 32px;
+}
 .marketing-wordmark__mark { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; color: #fff; background: #1769ff; font-size: 18px; font-style: italic; }
 .marketing-nav__links { display: flex; align-items: center; gap: 30px; margin-left: auto; }
 .marketing-nav__links a, .marketing-nav__login { color: #4f4f4f; text-decoration: none; font-size: 14px; transition: color .2s ease; }
@@ -361,14 +370,21 @@ body {
 .intent-panel::after { inset: 35% 0 0; background: linear-gradient(transparent, rgba(7,9,12,.88)); }
 .intent-panel a svg, .business-more a svg, .editorial-link svg { transition: transform .2s ease; }
 .intent-panel a:hover svg, .business-more a:hover svg, .editorial-link:hover svg { transform: translateX(3px); }
-.workflow-story { display: grid; grid-template-columns: .8fr 1.2fr; gap: 70px; align-items: center; background: #fff; }
-.workflow-copy ol { list-style: none; margin: 58px 0 0; padding: 0; border-top: 1px solid #d7d7d4; }
-.workflow-copy li { display: grid; grid-template-columns: 74px 1fr; gap: 18px; padding: 26px 0; border-bottom: 1px solid #d7d7d4; }
-.workflow-copy li span { color: #8a8a8a; font-size: 28px; line-height: 1; letter-spacing: -.03em; }
-.workflow-copy li strong { font-size: 21px; font-weight: 500; }
-.workflow-copy li p { max-width: 360px; margin: 6px 0 0; color: #777; font-size: 14px; line-height: 1.45; }
-.workflow-visual { position: relative; min-height: 760px; overflow: hidden; border-radius: 24px; background: #eee; }
-.workflow-visual img { width: 100%; height: 100%; min-height: inherit; object-fit: cover; }
+.workflow-story { display: grid; grid-template-columns: minmax(0, 48fr) minmax(0, 52fr); gap: clamp(42px, 5vw, 88px); align-items: center; padding-top: 116px; padding-bottom: 116px; background: #fff; }
+.workflow-copy { min-width: 0; }
+.workflow-copy h2 { font-size: clamp(56px, 5vw, 72px); }
+.workflow-steps { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; list-style: none; margin: 52px 0 0; padding: 0; }
+.workflow-steps::before { content: ''; position: absolute; top: 29px; left: 29px; right: 29px; height: 1px; background: #c9cbd0; }
+.workflow-step { position: relative; min-width: 0; }
+.workflow-step__icon { position: relative; z-index: 1; display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; background: #e8e9ed; color: #1d2026; }
+.workflow-step__label { display: block; margin-top: 16px; color: #34363b; font-size: 14px; line-height: 1.25; }
+.workflow-step__label strong, .workflow-step__label > span { display: block; font-weight: 500; }
+.workflow-step__label > span { margin-top: 3px; color: #65676c; font-weight: 400; }
+.workflow-cta { display: inline-flex; align-items: center; justify-content: center; gap: 16px; width: max-content; min-height: 46px; margin-top: 36px; padding: 0 20px; border-radius: 8px; background: #101113; color: #fff; font-size: 14px; font-weight: 500; text-decoration: none; transition: background .2s ease, transform .2s ease; }
+.workflow-cta:hover { background: #292b30; transform: translateY(-2px); }
+.workflow-cta:focus-visible { outline: 2px solid #303744; outline-offset: 3px; }
+.workflow-visual { width: 100%; aspect-ratio: 5 / 6; max-height: 660px; overflow: hidden; border-radius: 28px; background: #f1f1f1; }
+.workflow-visual img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .business-story { background: #f4f4f2; }
 .business-mosaic { display: grid; grid-template-columns: 1.25fr .75fr; gap: 18px; }
 .business-mosaic figure { position: relative; margin: 0; min-height: 420px; overflow: hidden; border-radius: 18px; }
@@ -405,7 +421,11 @@ body {
 .business-showcase__visual { position: relative; min-width: 0; padding: 12px 10px 42px 0; }
 .business-showcase__photo { position: relative; width: 100%; height: 405px; overflow: hidden; border-radius: 23px; background: #232b31; }
 .business-showcase__photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.business-showcase__photo img.business-showcase__composite { width: 200%; max-width: none; object-fit: fill; transform: translateX(-50%); }
+.business-showcase__photo img.business-showcase__composite { width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block; }
 .business-showcase__descriptor { position: absolute; right: 0; bottom: 0; width: min(270px, 70%); min-height: 96px; padding: 19px 22px; border-radius: 18px; background: #252d35; color: #fff; box-shadow: 0 15px 30px rgba(0,0,0,.18); }
 .business-showcase__descriptor span { display: block; font-size: 16px; font-weight: 500; }
 .business-showcase__descriptor p { margin: 5px 0 0; color: #bac1c8; font-size: 14px; line-height: 1.35; }
@@ -431,7 +451,7 @@ body {
 .pricing-pro { background: #151719 !important; color: #fff; border-color: #151719 !important; }
 .pricing-pro article > div > span, .pricing-pro > div > span { color: #b7b7b7; }
 .pricing-pro ul { border-color: #333; }
-.marketing-final { position: relative; min-height: 720px; overflow: hidden; display: grid; align-items: end; margin: 0 12px 12px; padding: 72px max(24px, calc((100vw - 1240px) / 2)); border-radius: 30px; background: #151719; color: #fff; }
+.marketing-final { position: relative; min-height: 560px; overflow: hidden; display: grid; align-items: end; margin: 100px 200px 250px 200px; padding: 72px max(24px, calc((100vw - 1240px) / 2)); border-radius: 30px; background: #151719; color: #fff; }
 .marketing-final > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .48; }
 .marketing-final::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,10,10,.94), rgba(10,10,10,.46) 62%, rgba(10,10,10,.18)); }
 .marketing-final > div { position: relative; z-index: 2; max-width: 800px; }
@@ -453,45 +473,109 @@ body {
 }
 
 @media (max-width: 767px) {
+
   .marketing-section { padding: 96px 16px; }
+
   .section-heading h2, .workflow-copy h2, .marketing-final h2 { font-size: 44px; }
+
   .section-heading--split { display: block; margin-bottom: 34px; }
+
   .section-heading--split > p:last-child { margin-top: 22px; font-size: 16px; }
+
   .section-heading--center { margin-bottom: 32px; }
+
   .product-editorial, .intent-layout, .workflow-story, .business-mosaic, .pricing-layout { grid-template-columns: 1fr; }
+
   .product-story { padding-top: 82px; padding-bottom: 82px; }
+
   .product-story .section-heading--split { margin-bottom: 30px; }
-  .product-feature, .product-feature--large { grid-column: auto; height: 430px; min-height: 0; border-radius: 18px; }
-  .product-feature--large { height: 500px; }
+
+  .product-feature, .product-feature--large { grid-column: auto; width: 100%; height: auto; aspect-ratio: 1 / 1; min-height: 0; border-radius: 18px; overflow: hidden; }
+
+  .product-feature img, .product-feature--large img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+
   .product-feature__copy { left: 22px; right: 22px; bottom: 24px; padding: 0; }
+
   .product-feature__copy h3 { font-size: 34px; }
+
   .product-secondary { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; padding-bottom: 0; scrollbar-width: none; }
+
   .product-secondary a { flex: 0 0 auto; }
-  .intent-panel, .intent-panel--primary { grid-row: auto; height: 500px; min-height: 0; border-radius: 18px; }
+
+  .intent-panel, .intent-panel--primary { grid-row: auto; width: 100%; height: auto; aspect-ratio: 1 / 1; min-height: 0; border-radius: 18px; overflow: hidden; }
+
+  .intent-panel img, .intent-panel--primary img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+
   .intent-panel > div { inset: auto 22px 24px; display: block; }
+
   .intent-panel span { display: block; font-size: 22px; }
+
   .intent-panel a { margin-top: 8px; }
-  .workflow-story { gap: 38px; }
-  .workflow-copy li { grid-template-columns: 58px 1fr; padding: 24px 0; }
-  .workflow-copy li span { font-size: 24px; }
-  .workflow-visual { min-height: 520px; border-radius: 20px; }
+
+  .workflow-story { gap: 46px; }
+
+  .workflow-copy h2 { font-size: clamp(46px, 9vw, 60px); }
+
+  .workflow-visual { aspect-ratio: 4 / 3; max-height: 520px; border-radius: 24px; }
+
   .business-mosaic__main { grid-row: auto; min-height: 560px !important; }
+
   .business-mosaic figure { min-height: 480px; }
+
   .business-more { align-items: flex-start; flex-direction: column; gap: 0; }
+
   .business-story { padding: 8px 8px 82px; }
+
   .business-showcase { display: flex; flex-direction: column; align-items: stretch; min-height: 0; gap: 28px; padding: 34px 18px 28px; border-radius: 28px; }
+
   .business-showcase__copy { display: contents; }
+
   .business-showcase .section-kicker { margin: 0 0 18px; }
+
   .business-showcase h2 { font-size: clamp(42px, 11vw, 52px); }
+
   .business-showcase__intro { margin-top: 16px; font-size: 16px; }
+
   .business-showcase__controls { display: contents; }
+
   .business-showcase__selector { order: 1; overflow-x: auto; padding: 8px 0 16px; border-bottom: 1px solid rgba(255,255,255,.18); scrollbar-width: none; }
+
   .business-showcase__visual { order: 2; padding: 0 0 58px; }
+
   .business-showcase__photo { height: 300px; border-radius: 20px; }
+
   .business-showcase__descriptor { width: min(240px, 78%); min-height: 86px; padding: 15px 18px; }
+
   .business-showcase__bottom { order: 3; padding-top: 0; }
+
   .pricing-layout article { min-height: 0; padding: 28px; }
+
   .pricing-layout h3 { font-size: 50px; }
-  .marketing-final { min-height: 700px; margin: 0 8px 8px; padding: 48px 22px; border-radius: 24px; }
+
+  .marketing-final { min-height: 520px; margin: 0 8px 100px; padding: 48px 22px; border-radius: 24px; }
+
   .marketing-final__actions { align-items: flex-start; flex-direction: column; gap: 0; }
+
+}
+
+@media (max-width: 900px) {
+  .workflow-story { grid-template-columns: 1fr; gap: 48px; }
+  .workflow-copy { max-width: 680px; }
+  .workflow-visual { max-width: 680px; justify-self: center; }
+}
+
+@media (max-width: 767px) {
+  .workflow-copy { display: flex; flex-direction: column; align-items: center; max-width: none; text-align: center; }
+  .workflow-steps { width: min(100%, 440px); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; margin-top: 38px; }
+  .workflow-steps::before { display: none; }
+  .workflow-step__icon { justify-self: center; width: 56px; height: 56px; }
+  .workflow-step:nth-child(odd)::after { content: ''; position: absolute; top: 28px; left: calc(50% + 28px); width: calc(100% - 36px); height: 1px; background: #c9cbd0; }
+  .workflow-step__label { margin-top: 12px; }
+  .workflow-cta { margin-top: 30px; }
+  .workflow-visual { max-width: none; }
+}
+
+@media (max-width: 600px) {
+  .workflow-story { padding-top: 92px; padding-bottom: 92px; gap: 40px; }
+  .workflow-visual { aspect-ratio: 5 / 4; border-radius: 22px; }
 }

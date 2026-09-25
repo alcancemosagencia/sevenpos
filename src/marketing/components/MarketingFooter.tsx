@@ -4,7 +4,7 @@ import { marketingLinks } from '../config/marketingLinks';
 
 export const MarketingFooter: React.FC = () => {
   return (
-    <footer className="bg-[#0B0D13] text-white font-sans border-t border-white/10">
+    <footer className="bg-[#000] text-white font-sans border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-16 space-y-10">
 
         {/* Main Footer Links */}
@@ -13,7 +13,7 @@ export const MarketingFooter: React.FC = () => {
           {/* Col 1: Brand & Bio */}
           <div className="col-span-2 space-y-3.5">
             <a href="#" className="flex items-center gap-2 focus:outline-none">
-              <img src={marketingAssets.hero.logo} alt="SevenPOS" className="h-6 w-auto object-contain" />
+              <img src={marketingAssets.hero.logo} alt="SevenPOS" className="h-12 w-auto object-contain" />
             </a>
             <p className="text-xs sm:text-sm font-normal text-white/60 max-w-sm leading-relaxed">
               El software de punto de venta, inventario y gestión para negocios que quieren crecer con orden y control en Latinoamérica.
@@ -55,7 +55,6 @@ export const MarketingFooter: React.FC = () => {
               <li><a href={marketingLinks.appLogin} className="hover:text-white transition-colors">Iniciar sesión</a></li>
               <li><a href={marketingLinks.appRegister} className="hover:text-white transition-colors">Crear cuenta</a></li>
               <li><a href="/soporte" className="hover:text-white transition-colors">Centro de Ayuda</a></li>
-              <li><a href="https://platform.sevenpos.pro" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">Platform Admin</a></li>
             </ul>
           </div>
 
