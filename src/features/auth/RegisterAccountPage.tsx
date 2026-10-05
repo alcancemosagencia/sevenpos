@@ -3,6 +3,8 @@ import { Mail, Lock, User, Store, Check, X, ArrowRight, AlertCircle, Sparkles, A
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Select';
 import sevenposLogo from '../../assets/branding/sevenpos-logo-horizontal.png';
+import { AuthSurface } from './AuthSurface';
+import { EXISTING_ACCOUNT_MESSAGE, authMessage } from '../../application/auth/authMessages';
 
 interface RegisterAccountPageProps {
   onRegister: (params: {
@@ -14,6 +16,10 @@ interface RegisterAccountPageProps {
     countryCode: string;
   }) => Promise<{ success: boolean; error?: string }>;
   onBackToLogin: () => void;
+  onForgotPassword?: () => void;
+  defaultFirstName?: string;
+  defaultLastName?: string;
+  defaultEmail?: string;
   defaultBusinessName?: string;
   defaultCountryCode?: string;
 }
@@ -21,12 +27,14 @@ interface RegisterAccountPageProps {
 export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
   onRegister,
   onBackToLogin,
+  onForgotPassword,
+  defaultFirstName = '', defaultLastName = '', defaultEmail = '',
   defaultBusinessName = '',
   defaultCountryCode = 'CL',
 }) => {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState(defaultFirstName);
+  const [lastName, setLastName] = useState(defaultLastName);
+  const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [businessName, setBusinessName] = useState(defaultBusinessName);
@@ -82,8 +90,9 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
         setErrorMessage(res.error || 'Error al registrar cuenta.');
       }
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error de conexión al registrar cuenta.');
+      setErrorMessage(authMessage(err, 'No pudimos iniciar el registro. Inténtalo nuevamente.'));
     } finally {
+      setPassword(''); setConfirmPassword('');
       setIsSubmitting(false);
     }
   };
@@ -95,9 +104,9 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
   ];
 
   return (
-    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
+    <AuthSurface><div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl bg-surface border border-border-default rounded-3xl shadow-2xl p-6 sm:p-8 md:p-10 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <img src={sevenposLogo} alt="SevenPOS" className="h-7 w-auto object-contain" />
           <button
             type="button"
@@ -122,7 +131,7 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
           </p>
         </div>
 
-        {errorMessage && (
+        {errorMessage && errorMessage !== EXISTING_ACCOUNT_MESSAGE && (
           <div className="p-3.5 rounded-xl bg-status-danger/10 border border-status-danger/20 text-status-danger text-xs flex items-center gap-2.5">
             <AlertCircle size={16} className="shrink-0" />
             <span>{errorMessage}</span>
@@ -164,20 +173,25 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1">Correo electrónico *</label>
+              <label htmlFor="register-email" className="block text-xs font-semibold text-text-secondary mb-1">Correo electrónico *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-tertiary">
                   <Mail size={15} />
                 </div>
                 <input
                   type="email"
+                  id="register-email"
+                  autoComplete="email"
+                  aria-invalid={errorMessage === EXISTING_ACCOUNT_MESSAGE}
+                  aria-describedby={errorMessage === EXISTING_ACCOUNT_MESSAGE ? 'register-email-error' : undefined}
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => { setEmail(e.target.value); setErrorMessage(null); }}
                   placeholder="jose@mipulperia.cl"
-                  className="w-full pl-9 pr-3 py-2 bg-surface-secondary border border-border-default rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary"
+                  className={`w-full pl-9 pr-3 py-2 bg-surface-secondary border rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary ${errorMessage === EXISTING_ACCOUNT_MESSAGE ? 'border-status-danger' : 'border-border-default'}`}
                 />
               </div>
+              {errorMessage === EXISTING_ACCOUNT_MESSAGE && <div className="mt-2 space-y-2"><p id="register-email-error" role="alert" className="text-xs text-status-danger">{EXISTING_ACCOUNT_MESSAGE}</p><div className="flex flex-wrap gap-3 text-xs font-semibold text-brand-primary"><button type="button" onClick={onBackToLogin}>Iniciar sesión</button>{onForgotPassword && <button type="button" onClick={onForgotPassword}>Recuperar contraseña</button>}</div></div>}
             </div>
           </div>
 
@@ -283,6 +297,6 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
           </Button>
         </form>
       </div>
-    </div>
+    </div></AuthSurface>
   );
 };

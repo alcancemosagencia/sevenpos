@@ -107,7 +107,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
     <div
       role="group"
       aria-label={`Código de verificación de ${length} dígitos`}
-      className={`flex items-center justify-center gap-1.5 sm:gap-2.5 ${className}`}
+      className={`flex w-full min-w-0 items-center justify-center gap-1 sm:gap-2.5 ${className}`}
     >
       {Array.from({ length }, (_, index) => {
         const digit = digits[index] || '';
@@ -130,7 +130,7 @@ export const OtpInput: React.FC<OtpInputProps> = ({
             onChange={(e) => handleChange(e, index)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             onPaste={handlePaste}
-            className={`w-9 h-12 sm:w-11 sm:h-14 text-center text-lg sm:text-xl font-mono font-bold rounded-xl border transition-all outline-none ${
+            className={`min-w-0 w-full max-w-9 flex-1 h-12 sm:max-w-11 sm:h-14 text-center text-lg sm:text-xl font-mono font-bold rounded-xl border transition-all outline-none ${
               hasError
                 ? 'border-status-danger/70 bg-status-danger/5 text-status-danger focus:border-status-danger focus:ring-2 focus:ring-status-danger/20'
                 : isFilled

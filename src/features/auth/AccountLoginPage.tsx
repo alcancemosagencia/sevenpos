@@ -3,12 +3,15 @@ import { Mail, Lock, ArrowRight, AlertCircle, Sparkles, ArrowLeft } from 'lucide
 import { Button } from '../../components/ui/Button';
 import sevenposLogo from '../../assets/branding/sevenpos-logo-horizontal.png';
 import onboardingOwnerIllustration from '../../assets/illustrations/onboarding-owner.png';
+import { AuthSurface } from './AuthSurface';
+import { authMessage } from '../../application/auth/authMessages';
 
 interface AccountLoginPageProps {
   onLogin: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   onGoToRegister: () => void;
   onForgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   onBack?: () => void;
+  initialRecovery?: boolean;
 }
 
 export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
@@ -16,6 +19,7 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
   onGoToRegister,
   onForgotPassword,
   onBack,
+  initialRecovery = false,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,9 +28,9 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
   const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
   const [isResetMode, setIsResetMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      return window.location.pathname.includes('reset-password');
+      return initialRecovery || window.location.pathname.includes('reset-password');
     }
-    return false;
+    return initialRecovery;
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,7 +53,7 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
           setErrorMessage(res.error || 'Error al enviar enlace de recuperación.');
         }
       } catch (err: unknown) {
-        setErrorMessage(err instanceof Error ? err.message : 'Error de conexión.');
+        setErrorMessage(authMessage(err, 'Error de conexión.'));
       } finally {
         setIsSubmitting(false);
       }
@@ -68,14 +72,14 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
         setErrorMessage(res.error || 'Correo o contraseña incorrectos.');
       }
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error de conexión al autenticar.');
+      setErrorMessage(authMessage(err, 'Error de conexión al autenticar.'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
+    <AuthSurface><div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-4xl bg-surface border border-border-default rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[580px]">
         {/* Left Visual Branding Panel (Hidden on small screens) */}
         <div className="hidden lg:flex lg:col-span-5 bg-gradient-to-br from-brand-primary/15 via-surface-secondary to-background p-8 flex-col justify-between border-r border-border-default relative overflow-hidden">
@@ -255,6 +259,6 @@ export const AccountLoginPage: React.FC<AccountLoginPageProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div></AuthSurface>
   );
 };

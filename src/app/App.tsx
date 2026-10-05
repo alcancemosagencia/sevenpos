@@ -217,6 +217,7 @@ function getCanonicalPathForNavId(navId: string): AppRoute {
 }
 
 const AppRoot: React.FC = () => {
+  const [requestedRecovery, setRequestedRecovery] = useState(false);
   const {
     isHydrated,
     bootStatus,
@@ -237,7 +238,6 @@ const AppRoot: React.FC = () => {
     setupCloudBusiness,
     checkEmailVerified,
     verifyEmailOtp,
-    updatePendingVerificationEmail,
     resendVerificationEmail,
     sendPasswordReset,
     enrollDevice,
@@ -457,8 +457,9 @@ const AppRoot: React.FC = () => {
       <>
         <AccountLoginPage
           onLogin={signInWithEmail}
-          onGoToRegister={goToRegister}
+          onGoToRegister={() => { setRequestedRecovery(false); goToRegister(); }}
           onForgotPassword={sendPasswordReset}
+          initialRecovery={requestedRecovery}
           onBack={goToRegister}
         />
         {renderDevTools()}
@@ -472,7 +473,11 @@ const AppRoot: React.FC = () => {
       <>
         <RegisterAccountPage
           onRegister={signUpWithEmail}
-          onBackToLogin={goToAccountLogin}
+          onBackToLogin={() => { setRequestedRecovery(false); goToAccountLogin(); }}
+          onForgotPassword={() => { setRequestedRecovery(true); goToAccountLogin(); }}
+          defaultFirstName={state.owner.firstName}
+          defaultLastName={state.owner.lastName}
+          defaultEmail={state.owner.email}
           defaultBusinessName={state.business.name}
           defaultCountryCode={state.countryCode}
         />
@@ -490,8 +495,9 @@ const AppRoot: React.FC = () => {
           onVerifyOtp={verifyEmailOtp}
           onCheckVerification={checkEmailVerified}
           onResendEmail={resendVerificationEmail}
-          onUpdateEmail={updatePendingVerificationEmail}
-          onBackToLogin={goToAccountLogin}
+          onChangeEmail={() => { setRequestedRecovery(false); goToRegister(); }}
+          onForgotPassword={() => { setRequestedRecovery(true); goToAccountLogin(); }}
+          onBackToLogin={() => { setRequestedRecovery(false); goToAccountLogin(); }}
         />
         {renderDevTools()}
       </>

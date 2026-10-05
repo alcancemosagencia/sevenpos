@@ -9,6 +9,7 @@ import {
 } from '../../domain/auth/CloudAuthService';
 import { DeviceType } from '../../domain/auth/DeviceEnrollment';
 import { authRedirectOrigin } from './authRedirectOrigin';
+import { authMessage } from '../../application/auth/authMessages';
 
 export class SupabaseAuthService implements CloudAuthService {
   constructor(private client: SupabaseClient) {}
@@ -58,12 +59,13 @@ export class SupabaseAuthService implements CloudAuthService {
         data: {
           first_name: params.firstName.trim(),
           last_name: params.lastName ? params.lastName.trim() : '',
+          ...(params.businessName ? { business_name: params.businessName.trim(), country_code: params.countryCode } : {}),
         },
       },
     });
 
     if (error) {
-      throw error;
+      throw new Error(authMessage(error, 'No pudimos iniciar el registro. Inténtalo nuevamente.'));
     }
 
     const user = data.user
@@ -91,6 +93,9 @@ export class SupabaseAuthService implements CloudAuthService {
   ): Promise<CloudUser> {
     const cleanToken = token.trim();
     const cleanEmail = email.trim();
+    if (type === 'signup' && !/^\d{8}$/.test(cleanToken)) {
+      throw new Error('Código incorrecto. Revisa los números e inténtalo nuevamente.');
+    }
 
     const { data, error } = await this.client.auth.verifyOtp({
       email: cleanEmail,
@@ -109,7 +114,7 @@ export class SupabaseAuthService implements CloudAuthService {
       if (lower.includes('rate') || lower.includes('security') || lower.includes('too many') || lower.includes('once every')) {
         throw new Error('Demasiados intentos. Espera unos minutos antes de intentar de nuevo.');
       }
-      throw new Error(error.message || 'Error al verificar el código de confirmación.');
+      throw new Error('No pudimos verificar el código. Inténtalo nuevamente.');
     }
 
     if (!data.user) {
@@ -139,7 +144,7 @@ export class SupabaseAuthService implements CloudAuthService {
       if (lower.includes('rate') || lower.includes('security') || lower.includes('too many') || lower.includes('once every')) {
         throw new Error('Por favor espera antes de solicitar un nuevo código de verificación.');
       }
-      throw new Error(error.message || 'Error al reenviar el correo de verificación.');
+      throw new Error('No pudimos reenviar el código. Inténtalo nuevamente.');
     }
   }
 

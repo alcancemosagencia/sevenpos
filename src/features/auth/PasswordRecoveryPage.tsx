@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { getSupabaseClient } from '../../infrastructure/cloud/supabaseClient';
 import { getCustomerAppUrl } from '../../app/customerAppUrls';
+import { AuthSurface } from './AuthSurface';
 
 /** Consumes a recovery session on the same origin where the old email link lands. */
 export function PasswordRecoveryPage() {
@@ -51,15 +52,15 @@ export function PasswordRecoveryPage() {
       setPassword('');
       setConfirm('');
       window.location.replace(getCustomerAppUrl('/login'));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No se pudo actualizar la contraseña.');
+    } catch {
+      setError('No se pudo actualizar la contraseña. Inténtalo nuevamente.');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-background text-text-primary flex items-center justify-center p-6">
+    <AuthSurface><main className="min-h-screen bg-background text-text-primary flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-border-default bg-surface p-8 shadow-xl">
         <p className="text-sm font-semibold text-brand-primary">SevenPOS</p>
         <h1 className="mt-4 text-2xl font-bold">Restablecer contraseña</h1>
@@ -83,6 +84,6 @@ export function PasswordRecoveryPage() {
         {error && <p role="alert" className="mt-4 text-sm text-status-danger">{error}</p>}
         <a className="mt-6 inline-block text-sm text-brand-primary underline" href={getCustomerAppUrl('/login')}>Ir al inicio de sesión</a>
       </div>
-    </main>
+    </main></AuthSurface>
   );
 }

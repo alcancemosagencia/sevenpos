@@ -8,6 +8,55 @@
 @import "@fontsource/urbanist/700.css";
 @import "@fontsource/urbanist/800.css";
 
+/* Cloud auth surfaces are light without touching the operational theme preference. */
+.auth-surface {
+  color-scheme: light;
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-primary: #ffffff;
+  --surface-secondary: #f1f5f9;
+  --surface-raised: #ffffff;
+  --surface-hover: #f1f5f9;
+  --surface-selected: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --border-default: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --text-disabled: #cbd5e1;
+  --status-danger-bg: #fef2f2;
+  --status-danger-text: #b91c1c;
+  --status-success-bg: #ecfdf5;
+  --status-success-text: #047857;
+  --status-warning-bg: #fffbeb;
+  --status-warning-text: #b45309;
+  --status-info-bg: #eff6ff;
+  --status-info-text: #1d4ed8;
+  /* Tailwind @theme aliases otherwise inherit values computed on the dark root. */
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-selected: var(--surface-selected);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-text-disabled: var(--text-disabled);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-danger-text: var(--status-danger-text);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-text: var(--status-success-text);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-warning-text: var(--status-warning-text);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-text: var(--status-info-text);
+}
+
 @layer base {
   :root {
     /* Radius Tokens - Semánticos calibrados */

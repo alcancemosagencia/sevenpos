@@ -18,6 +18,8 @@ import { cloudAuthServiceFactory } from '../infrastructure/cloud/CloudAuthServic
 import { DeviceEnrollmentStorage } from '../infrastructure/auth/DeviceEnrollmentStorage';
 import { CloudBusinessLinkStorage } from '../infrastructure/auth/CloudBusinessLinkStorage';
 import { logAuditEventSafely } from '../application/audit/auditEventHelper';
+import { clearRegistrationDraft, completeRegistration, readRegistrationDraft, registrationDraft, restoreRegistrationFields, saveRegistrationDraft } from '../application/auth/RegistrationDraft';
+import { authMessage } from '../application/auth/authMessages';
 
 export type AuthStateMachineState =
   | 'BOOTING'
@@ -107,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus>('incomplete');
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('locked');
   const [isCompletionCelebrationActive, setIsCompletionCelebrationActive] = useState<boolean>(false);
-  const [state, setState] = useState<OnboardingState>(() => onboardingRepository.load());
+  const [state, setState] = useState<OnboardingState>(() => restoreRegistrationFields(onboardingRepository.load(), readRegistrationDraft()));
   const { setCountryCode } = useCountry();
 
   // Cloud state
@@ -119,10 +121,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   const [cloudBusinessLink, setCloudBusinessLink] = useState<CloudBusinessLink | null>(() =>
     CloudBusinessLinkStorage.getLink()
   );
-  const [pendingEmailForVerification, setPendingEmailForVerification] = useState<string>('');
-  const [pendingDraftBusinessName, setPendingDraftBusinessName] = useState<string>('');
-  const [pendingDraftCountryCode, setPendingDraftCountryCode] = useState<string>('CL');
-  const [pendingDraftOwnerFirstName, setPendingDraftOwnerFirstName] = useState<string>('');
+  const [pendingRegistration, setPendingRegistration] = useState(readRegistrationDraft);
+  const [pendingEmailForVerification, setPendingEmailForVerification] = useState<string>(() => readRegistrationDraft()?.email ?? '');
   const [resolvedBusinessId, setResolvedBusinessId] = useState<string | null>(() => {
     const enc = DeviceEnrollmentStorage.getEnrollment();
     if (enc?.localBusinessId) return enc.localBusinessId;
@@ -130,7 +130,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     if (link?.localBusinessId) return link.localBusinessId;
     return null;
   });
-  const [pendingDraftOwnerLastName, setPendingDraftOwnerLastName] = useState<string>('');
   const [isLinkingModalOpen, setIsLinkingModalOpen] = useState(false);
 
   const businessRepo = repositoryFactory.getBusinessRepository();
@@ -142,6 +141,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     if (cloudServiceOverride) return cloudServiceOverride;
     return cloudAuthServiceFactory.getService();
   }, [cloudServiceOverride]);
+
+  const restoreRegistration = useCallback(async (): Promise<boolean> => {
+    const draft = readRegistrationDraft();
+    if (!draft) return false;
+    setPendingRegistration(draft); setPendingEmailForVerification(draft.email);
+    setState(previous => restoreRegistrationFields(previous, draft));
+    try {
+      const service = getCloudService(); const user = await service.getUser();
+      if (user?.emailConfirmed && user.email.trim().toLowerCase() === draft.email) {
+        setCloudUser(user);
+        const membership = await completeRegistration(service, user, draft);
+        if (membership) { setCloudMembership(membership); setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED'); return true; }
+      }
+    } catch { /* Keep the draft and retry after confirmation; never discard on network failure. */ }
+    setAuthMachineState('EMAIL_VERIFICATION_REQUIRED'); return true;
+  }, [getCloudService]);
 
   // Non-blocking background hydration of cloud session if available
   const hydrateCloudSessionSilently = useCallback(async () => {
@@ -263,14 +278,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         : '';
 
       // State Machine Resolution:
-      if (initialPath === '/register' && result.sessionStatus !== 'unlocked') {
+      if (!localEnrollment && !(result.onboardingStatus === 'completed' && result.business) && await restoreRegistration()) {
+        // Registration refresh resumes the non-secret draft, never enrolled-device unlock.
+      } else if (initialPath === '/register' && result.sessionStatus !== 'unlocked') {
         setAuthMachineState('REGISTER_REQUIRED');
       } else if (localEnrollment) {
         // Enrolled device: check local session status
         if (result.sessionStatus === 'unlocked') {
           setAuthMachineState('DEVICE_UNLOCKED');
         } else {
-          setAuthMachineState('DEVICE_LOCKED');
+          const owner = await userRepo.getOwnerUser();
+          setAuthMachineState(owner && await pinVault.hasPinCredential(owner.id) ? 'DEVICE_LOCKED' : 'PIN_SETUP_REQUIRED');
         }
       } else if (result.onboardingStatus === 'completed' && result.business) {
         // Existing local business on PC: PIN login or unlocked
@@ -297,7 +315,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         setBootError(msg);
       }
     }
-  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode, hydrateCloudSessionSilently]);
+  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode, hydrateCloudSessionSilently, restoreRegistration]);
 
   useEffect(() => {
     let isMounted = true;
@@ -363,13 +381,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
           ? window.location.pathname.split('?')[0].replace(/\/+$/, '') || '/'
           : '';
 
-        if (initialPath === '/register' && result.sessionStatus !== 'unlocked') {
+        if (!localEnrollment && !(result.onboardingStatus === 'completed' && result.business) && await restoreRegistration()) {
+          // The draft is deliberately subordinate to an existing local terminal.
+        } else if (initialPath === '/register' && result.sessionStatus !== 'unlocked') {
           setAuthMachineState('REGISTER_REQUIRED');
         } else if (localEnrollment) {
           if (result.sessionStatus === 'unlocked') {
             setAuthMachineState('DEVICE_UNLOCKED');
           } else {
-            setAuthMachineState('DEVICE_LOCKED');
+            const owner = await userRepo.getOwnerUser();
+            if (!isMounted) return;
+            setAuthMachineState(owner && await pinVault.hasPinCredential(owner.id) ? 'DEVICE_LOCKED' : 'PIN_SETUP_REQUIRED');
           }
         } else if (result.onboardingStatus === 'completed' && result.business) {
           if (result.sessionStatus === 'unlocked') {
@@ -401,7 +423,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     return () => {
       isMounted = false;
     };
-  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode, hydrateCloudSessionSilently]);
+  }, [businessRepo, userRepo, pinVault, sessionRepo, setCountryCode, hydrateCloudSessionSilently, restoreRegistration]);
 
   // Synchronize browser canonical URL anytime auth lifecycle state changes
   useEffect(() => {
@@ -487,8 +509,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
 
       return { success: true };
     } catch (err: unknown) {
-      console.error('Error during signInWithEmail:', err);
-      return { success: false, error: err instanceof Error ? err.message : 'Correo o contraseña incorrectos.' };
+      return { success: false, error: authMessage(err, 'Correo o contraseña incorrectos.') };
     }
   };
 
@@ -561,41 +582,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
 
       // Store pending business draft for post-confirmation bootstrap
       const chosenCountry = (params.countryCode as SupportedCountryCode) || 'CL';
-      const prof = COUNTRY_PROFILES[chosenCountry] || COUNTRY_PROFILES.CL;
-      setPendingDraftBusinessName(params.businessName.trim());
-      setPendingDraftCountryCode(chosenCountry);
-      setPendingDraftOwnerFirstName(params.firstName.trim());
-      setPendingDraftOwnerLastName(params.lastName ? params.lastName.trim() : '');
-
-      setCountryCode(chosenCountry);
-      setState((prev) => ({
-        ...prev,
-        countryCode: chosenCountry,
-        business: {
-          ...prev.business,
-          name: params.businessName.trim(),
-          phonePrefix: prof.phonePrefix,
-        },
-        regionalSettings: {
-          ...prev.regionalSettings,
-          primaryCurrencyCode: prof.primaryCurrency.code,
-          secondaryCurrencyCode: prof.secondaryCurrency?.code,
-          enableSecondaryUSD: chosenCountry === 'VE',
-        },
-        owner: {
-          ...prev.owner,
-          firstName: params.firstName.trim(),
-          lastName: params.lastName ? params.lastName.trim() : '',
-          email: params.email.trim(),
-        },
-      }));
+      const draft = registrationDraft(params);
+      if (!draft) return { success: false, error: 'Revisa los datos de registro antes de continuar.' };
 
       const { user, requiresEmailVerification } = await cloudService.signUp({
         email: params.email,
         password: params.password,
         firstName: params.firstName,
         lastName: params.lastName,
+        businessName: draft.businessName,
+        countryCode: draft.countryCode,
       });
+
+      saveRegistrationDraft(draft); setPendingRegistration(draft);
+      if (state.onboardingStatus !== 'completed') setCountryCode(chosenCountry);
+      setState(previous => restoreRegistrationFields(previous, draft));
 
       setCloudUser(user);
       setPendingEmailForVerification(params.email);
@@ -624,8 +625,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
       return { success: true, requiresEmailVerification: false };
     } catch (err: unknown) {
-      console.error('Error during signUpWithEmail:', err);
-      return { success: false, error: err instanceof Error ? err.message : 'Error al registrar cuenta.' };
+      return { success: false, error: authMessage(err, 'No pudimos iniciar el registro. Inténtalo nuevamente.') };
     }
   };
 
@@ -662,8 +662,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       }));
 
       const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
-        firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
-        lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
+        firstName: pendingRegistration?.firstName || state.owner.firstName || 'Propietario',
+        lastName: pendingRegistration?.lastName || state.owner.lastName || '',
         businessName: params.businessName.trim(),
         countryCode: chosenCountry,
       });
@@ -685,96 +685,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     }
   };
 
-  // Check Email Verification
+  const finishVerifiedUser = async (user: CloudUser) => {
+    const membership = await completeRegistration(getCloudService(), user, pendingRegistration ?? readRegistrationDraft());
+    setCloudUser(user);
+    if (!membership) { setAuthMachineState('BUSINESS_SETUP_REQUIRED'); return; }
+    setCloudMembership(membership);
+    const enrollment = DeviceEnrollmentStorage.getEnrollment();
+    if (enrollment?.cloudBusinessId === membership.businessId && enrollment.userId === user.id) {
+      const owner = await userRepo.getOwnerUser();
+      const hasPin = owner && await pinVault.hasPinCredential(owner.id);
+      setAuthMachineState(hasPin ? sessionStatus === 'unlocked' ? 'DEVICE_UNLOCKED' : 'DEVICE_LOCKED' : 'PIN_SETUP_REQUIRED');
+    } else setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
+  };
+
+  // A retry after verification never consumes the single-use OTP again.
   const checkEmailVerified = async (): Promise<boolean> => {
     try {
-      const cloudService = getCloudService();
-      const isVerified = await cloudService.checkEmailVerified();
-      if (!isVerified) {
-        return false;
-      }
-
-      const user = await cloudService.getUser();
-      if (user) {
-        setCloudUser(user);
-        const memberships = await cloudService.getMemberships();
-        const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
-
-        if (ownerMembership) {
-          setCloudMembership(ownerMembership);
-          setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
-        } else if (pendingDraftBusinessName) {
-          // Auto-bootstrap using draft provided at signup
-          const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
-            firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
-            lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
-            businessName: pendingDraftBusinessName,
-            countryCode: pendingDraftCountryCode,
-          });
-
-          setCloudMembership({
-            businessId: bootstrapRes.businessId,
-            businessName: bootstrapRes.businessName,
-            countryCode: bootstrapRes.countryCode,
-            role: bootstrapRes.role,
-            status: 'ACTIVE',
-          });
-
-          setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
-        } else {
-          // Prompt user to name their business
-          setAuthMachineState('BUSINESS_SETUP_REQUIRED');
-        }
-      }
-      return true;
-    } catch (err) {
-      console.error('Error checking email verification:', err);
-      return false;
-    }
+      const user = await getCloudService().getUser();
+      if (!user?.emailConfirmed) return false;
+      if (pendingEmailForVerification && user.email.trim().toLowerCase() !== pendingEmailForVerification.trim().toLowerCase()) return false;
+      await finishVerifiedUser(user); return true;
+    } catch { return false; }
   };
 
   // Verify Email OTP
   const verifyEmailOtp = async (token: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const cloudService = getCloudService();
-      const user = await cloudService.verifyEmailOtp(pendingEmailForVerification, token, 'signup');
-      setCloudUser(user);
-
-      const memberships = await cloudService.getMemberships();
-      const ownerMembership = memberships.find((m) => m.role === 'OWNER' && m.status === 'ACTIVE');
-
-      if (ownerMembership) {
-        setCloudMembership(ownerMembership);
-        setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
-      } else if (pendingDraftBusinessName) {
-        // Auto-bootstrap using draft provided at signup
-        const bootstrapRes = await cloudService.bootstrapOwnerBusiness({
-          firstName: pendingDraftOwnerFirstName || state.owner.firstName || 'Propietario',
-          lastName: pendingDraftOwnerLastName || state.owner.lastName || '',
-          businessName: pendingDraftBusinessName,
-          countryCode: pendingDraftCountryCode,
-        });
-
-        setCloudMembership({
-          businessId: bootstrapRes.businessId,
-          businessName: bootstrapRes.businessName,
-          countryCode: bootstrapRes.countryCode,
-          role: bootstrapRes.role,
-          status: 'ACTIVE',
-        });
-
-        setAuthMachineState('DEVICE_ENROLLMENT_REQUIRED');
-      } else {
-        // Prompt user to name their business
-        setAuthMachineState('BUSINESS_SETUP_REQUIRED');
-      }
-
+      const current = await cloudService.getUser();
+      const user = current?.emailConfirmed && current.email.trim().toLowerCase() === pendingEmailForVerification.trim().toLowerCase()
+        ? current : await cloudService.verifyEmailOtp(pendingEmailForVerification, token, 'signup');
+      await finishVerifiedUser(user);
       return { success: true };
     } catch (err: unknown) {
-      console.error('Error verifying email OTP:', err);
       return {
         success: false,
-        error: err instanceof Error ? err.message : 'Error al verificar el código.',
+        error: authMessage(err, 'No pudimos completar la verificación. Intenta continuar nuevamente; tus datos se conservan.'),
       };
     }
   };
@@ -800,6 +746,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
 
     const cloudService = getCloudService();
     if (pendingEmailForVerification) {
+      const current = await cloudService.getUser();
+      if (current?.emailConfirmed && current.email.trim().toLowerCase() === pendingEmailForVerification.trim().toLowerCase()) {
+        await finishVerifiedUser(current);
+        return;
+      }
       await cloudService.resendVerificationEmail(pendingEmailForVerification);
     }
   };
@@ -810,7 +761,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       await cloudService.sendPasswordReset(email);
       return { success: true };
     } catch (err: unknown) {
-      return { success: false, error: err instanceof Error ? err.message : 'Error al enviar restablecimiento.' };
+      return { success: false, error: authMessage(err, 'No pudimos solicitar el enlace. Inténtalo nuevamente.') };
     }
   };
 
@@ -884,12 +835,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
 
       // If this PC already had local PIN and owner, transition directly to unlocked
       const owner = await userRepo.getOwnerUser();
-      if (owner) {
-        setSessionStatus('unlocked');
-        setAuthMachineState('DEVICE_UNLOCKED');
-      } else {
-        setAuthMachineState('PIN_SETUP_REQUIRED');
-      }
+      const hasPin = owner && await pinVault.hasPinCredential(owner.id);
+      setAuthMachineState(hasPin ? sessionStatus === 'unlocked' ? 'DEVICE_UNLOCKED' : 'DEVICE_LOCKED' : 'PIN_SETUP_REQUIRED');
 
       return { success: true };
     } catch (err: unknown) {
@@ -958,6 +905,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       setOnboardingStatus('completed');
       setSessionStatus('unlocked');
       setAuthMachineState('DEVICE_UNLOCKED');
+      clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
       return { success: true };
     } catch (err: unknown) {
       console.error('Error setting up PIN:', err);
@@ -1342,20 +1290,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   };
 
   const goToAccountLogin = () => {
+    clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     setAuthMachineState('ACCOUNT_REQUIRED');
   };
 
   const goToRegister = () => {
+    clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     setAuthMachineState('REGISTER_REQUIRED');
   };
 
   const switchLocalAccount = () => {
+    clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     sessionRepo.clearSession().catch(() => {});
     setSessionStatus('locked');
     setAuthMachineState('ACCOUNT_REQUIRED');
   };
 
   const signOutCloudAccount = async () => {
+    clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     try {
       const cloudService = getCloudService();
       await cloudService.signOut();

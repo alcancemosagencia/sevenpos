@@ -43,6 +43,8 @@ export interface SignUpParams {
   password: string;
   firstName: string;
   lastName?: string;
+  businessName?: string;
+  countryCode?: string;
 }
 
 export interface CloudAuthService {

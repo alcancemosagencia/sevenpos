@@ -4,6 +4,8 @@ import { Button } from '../../components/ui/Button';
 import { OtpInput } from '../../components/ui/OtpInput';
 import { EMAIL_CONFIG } from '../../domain/email/EmailConfig';
 import sevenposLogo from '../../assets/branding/sevenpos-logo-horizontal.png';
+import { AuthSurface } from './AuthSurface';
+import { AMBIGUOUS_SIGNUP_MESSAGE, authMessage } from '../../application/auth/authMessages';
 
 const RESEND_COOLDOWN_SECONDS = EMAIL_CONFIG.TRANSACTIONAL.RESEND_COOLDOWN_SECONDS;
 const OTP_LENGTH = EMAIL_CONFIG.TRANSACTIONAL.DEFAULT_OTP_LENGTH;
@@ -15,6 +17,8 @@ interface VerifyEmailPageProps {
   onResendEmail: () => Promise<void>;
   onUpdateEmail?: (newEmail: string) => Promise<{ success: boolean; error?: string } | void>;
   onBackToLogin: () => void;
+  onChangeEmail?: () => void;
+  onForgotPassword?: () => void;
 }
 
 export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
@@ -24,6 +28,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
   onResendEmail,
   onUpdateEmail,
   onBackToLogin,
+  onChangeEmail, onForgotPassword,
 }) => {
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -35,6 +40,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
   // Cooldown timer
   const [cooldown, setCooldown] = useState<number>(RESEND_COOLDOWN_SECONDS);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const verificationPending = useRef(false);
 
   // Edit email modal / inline state
   const [isEditingEmail, setIsEditingEmail] = useState(false);
@@ -54,7 +60,8 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
 
   const handleVerifyOtp = async (codeToVerify?: string) => {
     const code = codeToVerify || otp;
-    if (code.length < OTP_LENGTH || !onVerifyOtp) return;
+    if (!new RegExp(`^\\d{${OTP_LENGTH}}$`).test(code) || !onVerifyOtp || verificationPending.current) return;
+    verificationPending.current = true;
 
     setIsVerifying(true);
     setErrorMessage(null);
@@ -71,9 +78,10 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
       }
     } catch (err: unknown) {
       setErrorMessage(
-        err instanceof Error ? err.message : 'Error al comprobar el código de verificación.'
+        authMessage(err, 'Error al comprobar el código de verificación.')
       );
     } finally {
+      verificationPending.current = false;
       setIsVerifying(false);
     }
   };
@@ -91,7 +99,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
         );
       }
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error al comprobar verificación.');
+      setErrorMessage(authMessage(err, 'Error al comprobar verificación.'));
     } finally {
       setIsChecking(false);
     }
@@ -109,7 +117,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
       setSuccessMessage('¡Nuevo código de verificación enviado!');
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error al reenviar el código.');
+      setErrorMessage(authMessage(err, 'Error al reenviar el código.'));
     } finally {
       setIsResending(false);
     }
@@ -134,14 +142,14 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
       setCooldown(RESEND_COOLDOWN_SECONDS);
       setOtp('');
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error al actualizar el correo.');
+      setErrorMessage(authMessage(err, 'Error al actualizar el correo.'));
     } finally {
       setIsUpdatingEmail(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
+    <AuthSurface><div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-md bg-surface border border-border-default rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 text-center">
         {/* Brand Logo */}
         <div className="flex justify-center">
@@ -159,7 +167,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
             Verifica tu cuenta
           </h1>
           <p className="text-xs sm:text-sm text-text-secondary">
-            Te enviamos un código de {OTP_LENGTH} dígitos a:
+            Revisa tu correo e ingresa el código de {OTP_LENGTH} dígitos para continuar:
           </p>
 
           {!isEditingEmail ? (
@@ -282,6 +290,7 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
         </div>
 
         {/* Back to Login */}
+        <div className="space-y-2 text-xs text-text-secondary"><p>{AMBIGUOUS_SIGNUP_MESSAGE}</p><div className="flex flex-wrap justify-center gap-3 font-semibold text-brand-primary"><button type="button" onClick={onBackToLogin}>Iniciar sesión</button>{onForgotPassword && <button type="button" onClick={onForgotPassword}>Recuperar contraseña</button>}{onChangeEmail && <button type="button" onClick={onChangeEmail}>Cambiar correo</button>}</div></div>
         <div className="pt-4 border-t border-border-default">
           <button
             type="button"
@@ -293,6 +302,6 @@ export const VerifyEmailPage: React.FC<VerifyEmailPageProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div></AuthSurface>
   );
 };
