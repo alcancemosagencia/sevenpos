@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CompleteSale, CompleteSaleInput } from '../CompleteSale';
 import { InMemorySaleRepository } from '../../../infrastructure/repositories/InMemorySaleRepository';
 import { InMemoryPaymentMethodRepository } from '../../../infrastructure/repositories/InMemoryPaymentMethodRepository';
@@ -26,6 +26,8 @@ describe('CompleteSale — Open Amount Items (Monto Libre)', () => {
   let cashMethodId: string;
 
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-15T12:00:00Z'));
     movementRepo = new InMemoryInventoryMovementRepository();
     cashSessionRepo = new InMemoryCashSessionRepository();
     saleRepo = new InMemorySaleRepository(movementRepo, cashSessionRepo);
@@ -97,6 +99,8 @@ describe('CompleteSale — Open Amount Items (Monto Libre)', () => {
     const cashMethod = methods.find((m) => m.code === 'CASH');
     cashMethodId = cashMethod!.id;
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it('completes sale with open amount item and persists custom description without inventory deduction (Adjustment 3)', async () => {
     const input: CompleteSaleInput = {
