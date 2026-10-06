@@ -1,4 +1,6 @@
-export const EXISTING_ACCOUNT_MESSAGE = 'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.';
+export const SAFE_SIGNUP_MESSAGE = 'Ya existe una cuenta con este correo o no pudimos completar el registro.';
+export const SAFE_SIGNUP_ACTION = 'Intenta iniciar sesión o recuperar tu contraseña.';
+export const EXISTING_ACCOUNT_MESSAGE = SAFE_SIGNUP_MESSAGE;
 export const AMBIGUOUS_SIGNUP_MESSAGE = 'Si ya tienes una cuenta, inicia sesión o recupera tu contraseña.';
 export function authMessage(error: unknown, fallback: string): string {
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';

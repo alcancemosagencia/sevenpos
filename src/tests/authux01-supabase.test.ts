@@ -25,7 +25,11 @@ describe('AUTH-UX-01 provider contract and sanitization', () => {
   });
   it('sanitizes unexpected signup error payloads', async () => {
     const { service } = fixture({ data: { user: null }, error: { message: 'access_token=canary', code: 'unexpected' } });
-    await expect(service.signUp(params)).rejects.toThrow('No pudimos iniciar el registro. Inténtalo nuevamente.');
+    await expect(service.signUp(params)).rejects.toThrow(EXISTING_ACCOUNT_MESSAGE);
+  });
+  it.each([null, { id: '', email: 'qa@example.com' }, { id: 'qa', email: 'other@example.com' }])('rejects missing or mismatched pending identity safely', async user => {
+    const { service } = fixture({ data: { user }, error: null });
+    await expect(service.signUp(params)).rejects.toThrow(EXISTING_ACCOUNT_MESSAGE);
   });
   it.each(['123456', '123456789', 'abcd1234', ''])('rejects non-canonical signup OTP before HTTP', async token => {
     const { auth, service } = fixture({});

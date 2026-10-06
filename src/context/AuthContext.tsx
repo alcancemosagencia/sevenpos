@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { OnboardingState, OnboardingStatus, SessionStatus } from '../types/onboarding';
 import { SupportedCountryCode } from '../types/country';
 import { COUNTRY_PROFILES } from '../config/countries';
@@ -122,6 +122,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
     CloudBusinessLinkStorage.getLink()
   );
   const [pendingRegistration, setPendingRegistration] = useState(readRegistrationDraft);
+  const memoryRegistration = useRef<{ draft: NonNullable<ReturnType<typeof registrationDraft>>; expiresAt: number } | null>(null);
+  const getPendingRegistration = () => readRegistrationDraft() ?? (memoryRegistration.current && memoryRegistration.current.expiresAt > Date.now() ? memoryRegistration.current.draft : null);
   const [pendingEmailForVerification, setPendingEmailForVerification] = useState<string>(() => readRegistrationDraft()?.email ?? '');
   const [resolvedBusinessId, setResolvedBusinessId] = useState<string | null>(() => {
     const enc = DeviceEnrollmentStorage.getEnrollment();
@@ -178,6 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
             const cc = activeMembership.countryCode as SupportedCountryCode;
             setCountryCode(cc);
             const prof = COUNTRY_PROFILES[cc];
+            const retained = readRegistrationDraft();
             setState((prev) => ({
               ...prev,
               countryCode: cc,
@@ -188,8 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
               },
               regionalSettings: {
                 ...prev.regionalSettings,
-                primaryCurrencyCode: prof.primaryCurrency.code,
-                secondaryCurrencyCode: prof.secondaryCurrency?.code,
+                primaryCurrencyCode: retained?.email === user.email.trim().toLowerCase() ? retained.currencyCode : prev.countryCode === cc ? prev.regionalSettings.primaryCurrencyCode : prof.primaryCurrency.code,
+                secondaryCurrencyCode: prev.regionalSettings.secondaryCurrencyCode || prof.secondaryCurrency?.code,
                 enableSecondaryUSD: cc === 'VE',
               },
             }));
@@ -468,13 +471,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       }
 
       // Query memberships
+      const retainedDraft = getPendingRegistration();
+      const matchingDraft = retainedDraft?.email === user.email.trim().toLowerCase() ? retainedDraft : null;
       const memberships = await cloudService.getMemberships();
-      const ownerMembership = memberships.find((m) => m.role === 'OWNER');
+      let ownerMembership = memberships.find((m) => m.role === 'OWNER');
+      if (!ownerMembership && matchingDraft) {
+        ownerMembership = await completeRegistration(cloudService, user, matchingDraft) ?? undefined;
+        setPendingRegistration(matchingDraft);
+        setState(previous => restoreRegistrationFields(previous, matchingDraft));
+      }
 
       if (!ownerMembership) {
         // Authenticated user with confirmed email, but no business created yet in Cloud DB
         const localBiz = await businessRepo.getPrimaryBusiness();
-        const hasLocalBusiness = (localBiz != null && localBiz.name.trim().length > 0) || (state.business.name.trim().length > 0);
+        const hasLocalBusiness = localBiz != null && localBiz.name.trim().length > 0;
         const localLink = CloudBusinessLinkStorage.getLink();
 
         if (hasLocalBusiness && !localLink) {
@@ -592,14 +602,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
         lastName: params.lastName,
         businessName: draft.businessName,
         countryCode: draft.countryCode,
+        currencyCode: draft.currencyCode,
       });
 
-      saveRegistrationDraft(draft); setPendingRegistration(draft);
+      if (!user?.id || user.email.trim().toLowerCase() !== draft.email) {
+        return { success: false, error: 'Ya existe una cuenta con este correo o no pudimos completar el registro.' };
+      }
+
+      const persisted = saveRegistrationDraft(draft);
+      memoryRegistration.current = persisted ? null : { draft, expiresAt: Date.now() + 86400000 };
+      setPendingRegistration(draft);
       if (state.onboardingStatus !== 'completed') setCountryCode(chosenCountry);
       setState(previous => restoreRegistrationFields(previous, draft));
 
       setCloudUser(user);
-      setPendingEmailForVerification(params.email);
+      setPendingEmailForVerification(draft.email);
 
       if (requiresEmailVerification || !user?.emailConfirmed) {
         setAuthMachineState('EMAIL_VERIFICATION_REQUIRED');
@@ -686,7 +703,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   };
 
   const finishVerifiedUser = async (user: CloudUser) => {
-    const membership = await completeRegistration(getCloudService(), user, pendingRegistration ?? readRegistrationDraft());
+    const draft = getPendingRegistration();
+    const membership = await completeRegistration(getCloudService(), user, draft);
+    if (draft && draft.email === user.email.trim().toLowerCase()) setState(previous => restoreRegistrationFields(previous, draft));
     setCloudUser(user);
     if (!membership) { setAuthMachineState('BUSINESS_SETUP_REQUIRED'); return; }
     setCloudMembership(membership);
@@ -868,8 +887,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
             },
             {
               businessId,
-              primaryCurrency: prof.primaryCurrency.code as import('../types/country').CurrencyCode,
-              secondaryCurrency: (prof.secondaryCurrency?.code as import('../types/country').CurrencyCode) || null,
+              primaryCurrency: state.regionalSettings.primaryCurrencyCode as import('../types/country').CurrencyCode,
+              secondaryCurrency: (state.regionalSettings.secondaryCurrencyCode as import('../types/country').CurrencyCode) || null,
               secondaryCurrencyEnabled: effectiveCountry === 'VE',
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
@@ -906,6 +925,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
       setSessionStatus('unlocked');
       setAuthMachineState('DEVICE_UNLOCKED');
       clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
+      memoryRegistration.current = null;
       return { success: true };
     } catch (err: unknown) {
       console.error('Error setting up PIN:', err);
@@ -1290,16 +1310,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   };
 
   const goToAccountLogin = () => {
-    clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
+    // Keep the non-secret draft for login/recovery after a confirmation link.
+    // Only a matching authenticated email may consume it.
+    setPendingEmailForVerification('');
     setAuthMachineState('ACCOUNT_REQUIRED');
   };
 
   const goToRegister = () => {
+    memoryRegistration.current = null;
     clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     setAuthMachineState('REGISTER_REQUIRED');
   };
 
   const switchLocalAccount = () => {
+    memoryRegistration.current = null;
     clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     sessionRepo.clearSession().catch(() => {});
     setSessionStatus('locked');
@@ -1307,6 +1331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; cloudServiceOve
   };
 
   const signOutCloudAccount = async () => {
+    memoryRegistration.current = null;
     clearRegistrationDraft(); setPendingRegistration(null); setPendingEmailForVerification('');
     try {
       const cloudService = getCloudService();

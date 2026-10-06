@@ -4,7 +4,7 @@ import { authMessage, EXISTING_ACCOUNT_MESSAGE } from '../application/auth/authM
 import type { CloudAuthService, CloudBusinessMembership } from '../domain/auth/CloudAuthService';
 import type { OnboardingState } from '../types/onboarding';
 
-const draft = registrationDraft({ firstName: ' Ana ', lastName: ' QA ', email: ' QA@EXAMPLE.COM ', businessName: ' QA negocio ', countryCode: 'VE', password: 'never-store', pin: 'never-store', currencyCode: 'EUR' })!;
+const draft = registrationDraft({ firstName: ' Ana ', lastName: ' QA ', email: ' QA@EXAMPLE.COM ', businessName: ' QA negocio ', countryCode: 'VE', password: 'never-store', pin: 'never-store', currencyCode: 'USD' })!;
 const user = { id: 'qa-user', email: 'qa@example.com', emailConfirmed: true };
 const member: CloudBusinessMembership = { businessId: 'qa-business', businessName: 'QA negocio', countryCode: 'VE', role: 'OWNER', status: 'ACTIVE' };
 const initial: OnboardingState = { onboardingStatus: 'incomplete', sessionStatus: 'locked', currentStep: 1, countryCode: 'CL', business: { name: '', fiscalId: '', phone: '', phonePrefix: '+56' }, owner: { firstName: '', role: 'Dueño' }, regionalSettings: { primaryCurrencyCode: 'CLP', enableSecondaryUSD: false } };
@@ -16,8 +16,18 @@ beforeEach(() => {
   vi.stubGlobal('sessionStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
 });
 describe('AUTH-UX-01 canonical registration recovery', () => {
-  it('normalizes identity and derives currency from the canonical country', () => {
-    expect(draft).toEqual({ firstName: 'Ana', lastName: 'QA', email: user.email, businessName: 'QA negocio', countryCode: 'VE', currencyCode: 'VES' });
+  it('normalizes identity and preserves selected currency separately from country', () => {
+    expect(draft).toEqual({ firstName: 'Ana', lastName: 'QA', email: user.email, businessName: 'QA negocio', countryCode: 'VE', currencyCode: 'USD' });
+  });
+  it.each([['CL', 'CLP'], ['CO', 'COP'], ['VE', 'VES'], ['VE', 'USD']])('preserves %s + %s through refresh and bootstrap', async (countryCode, currencyCode) => {
+    const selected = registrationDraft({ ...draft, countryCode, currencyCode })!;
+    saveRegistrationDraft(selected);
+    const restored = readRegistrationDraft(); expect(restored).toEqual(selected);
+    const api = service(); await completeRegistration(api, user, restored);
+    expect(api.bootstrapOwnerBusiness).toHaveBeenCalledWith(selected);
+  });
+  it.each(['EUR', '', 'COP'])('rejects unsupported VE currency %s instead of overwriting it', currencyCode => {
+    expect(registrationDraft({ ...draft, currencyCode })).toBeNull();
   });
   it.each(['', 'bad-email', 'qa@', '@example.com'])('rejects invalid email %s', email => {
     expect(registrationDraft({ ...draft, email })).toBeNull();
@@ -41,7 +51,7 @@ describe('AUTH-UX-01 canonical registration recovery', () => {
     const restored = restoreRegistrationFields(initial, draft);
     expect(restored.business.name).toBe(draft.businessName);
     expect(restored.owner.firstName).toBe('Ana'); expect(restored.owner.email).toBe(user.email);
-    expect(restored.regionalSettings).toMatchObject({ primaryCurrencyCode: 'VES', secondaryCurrencyCode: 'USD', enableSecondaryUSD: true });
+    expect(restored.regionalSettings).toMatchObject({ primaryCurrencyCode: 'USD', enableSecondaryUSD: true });
   });
   it('never overwrites completed local onboarding with a pending cloud draft', () => {
     const completed = { ...initial, onboardingStatus: 'completed' as const };

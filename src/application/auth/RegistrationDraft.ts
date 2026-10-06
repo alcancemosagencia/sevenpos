@@ -20,27 +20,31 @@ export function registrationDraft(value: unknown): RegistrationDraft | null {
   const text = (key: string, limit: number) => typeof raw[key] === 'string' ? raw[key].trim().slice(0, limit) : '';
   const email = text('email', 254).toLowerCase();
   const firstName = text('firstName', 100), businessName = text('businessName', 200);
+  const currencyCode = text('currencyCode', 3);
+  const profile = COUNTRY_PROFILES[country];
+  if (![profile.primaryCurrency.code, profile.secondaryCurrency?.code].includes(currencyCode)) return null;
   if (!firstName || !businessName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
-  return { firstName, lastName: text('lastName', 100), email, businessName, countryCode: country, currencyCode: COUNTRY_PROFILES[country].primaryCurrency.code };
+  return { firstName, lastName: text('lastName', 100), email, businessName, countryCode: country, currencyCode };
 }
 export function readRegistrationDraft(): RegistrationDraft | null {
   try {
     if (typeof sessionStorage === 'undefined') return null;
     const raw = JSON.parse(sessionStorage.getItem(REGISTRATION_DRAFT_KEY) ?? 'null');
-    if (!raw || !Number.isFinite(raw.startedAt) || Date.now() - raw.startedAt > 86400000 || raw.startedAt > Date.now()) return null;
+    if (!raw) return null;
+    if (!Number.isFinite(raw.startedAt) || Date.now() - raw.startedAt > 86400000 || raw.startedAt > Date.now()) { clearRegistrationDraft(); return null; }
     return registrationDraft(raw.draft);
   } catch { return null; }
 }
-export function saveRegistrationDraft(draft: RegistrationDraft): void {
+export function saveRegistrationDraft(draft: RegistrationDraft): boolean {
   const safe = registrationDraft(draft);
   if (!safe) throw new Error('REGISTRATION_DRAFT_INVALID');
-  try { sessionStorage.setItem(REGISTRATION_DRAFT_KEY, JSON.stringify({ startedAt: Date.now(), draft: safe })); } catch { /* Memory state still supports verification when storage is blocked. */ }
+  try { sessionStorage.setItem(REGISTRATION_DRAFT_KEY, JSON.stringify({ startedAt: Date.now(), draft: safe })); return true; } catch { return false; }
 }
 export function clearRegistrationDraft(): void { try { sessionStorage.removeItem(REGISTRATION_DRAFT_KEY); } catch { /* Storage may be unavailable. */ } }
 export function restoreRegistrationFields(state: OnboardingState, draft: RegistrationDraft | null): OnboardingState {
   if (!draft || state.onboardingStatus === 'completed') return state;
   const profile = COUNTRY_PROFILES[draft.countryCode];
-  return { ...state, countryCode: draft.countryCode, business: { ...state.business, name: draft.businessName, phonePrefix: profile.phonePrefix }, owner: { ...state.owner, firstName: draft.firstName, lastName: draft.lastName, email: draft.email }, regionalSettings: { ...state.regionalSettings, primaryCurrencyCode: draft.currencyCode, secondaryCurrencyCode: profile.secondaryCurrency?.code, enableSecondaryUSD: draft.countryCode === 'VE' } };
+  return { ...state, countryCode: draft.countryCode, business: { ...state.business, name: draft.businessName, phonePrefix: profile.phonePrefix }, owner: { ...state.owner, firstName: draft.firstName, lastName: draft.lastName, email: draft.email }, regionalSettings: { ...state.regionalSettings, primaryCurrencyCode: draft.currencyCode, secondaryCurrencyCode: profile.secondaryCurrency ? draft.currencyCode === profile.secondaryCurrency.code ? profile.primaryCurrency.code : profile.secondaryCurrency.code : undefined, enableSecondaryUSD: draft.countryCode === 'VE' } };
 }
 
 // The existing transactional RPC remains the sole creator. A response lost after

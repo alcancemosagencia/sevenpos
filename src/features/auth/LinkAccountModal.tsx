@@ -114,7 +114,7 @@ export const LinkAccountModal: React.FC<LinkAccountModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="auth-surface light fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="w-full max-w-lg bg-surface border border-border-default rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative">
         <button
           type="button"

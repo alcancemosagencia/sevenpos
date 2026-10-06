@@ -9,7 +9,7 @@ import {
 } from '../../domain/auth/CloudAuthService';
 import { DeviceType } from '../../domain/auth/DeviceEnrollment';
 import { authRedirectOrigin } from './authRedirectOrigin';
-import { authMessage } from '../../application/auth/authMessages';
+import { SAFE_SIGNUP_MESSAGE } from '../../application/auth/authMessages';
 
 export class SupabaseAuthService implements CloudAuthService {
   constructor(private client: SupabaseClient) {}
@@ -65,7 +65,13 @@ export class SupabaseAuthService implements CloudAuthService {
     });
 
     if (error) {
-      throw new Error(authMessage(error, 'No pudimos iniciar el registro. Inténtalo nuevamente.'));
+      throw new Error(SAFE_SIGNUP_MESSAGE);
+    }
+
+    // An accepted response is not proof of account creation or mail delivery.
+    // Never classify identities=[] as an existing account.
+    if (!data.user?.id || data.user.email?.trim().toLowerCase() !== params.email.trim().toLowerCase()) {
+      throw new Error(SAFE_SIGNUP_MESSAGE);
     }
 
     const user = data.user

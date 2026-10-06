@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Mail, Lock, User, Store, Check, X, ArrowRight, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
-import { Select } from '../../components/ui/Select';
-import sevenposLogo from '../../assets/branding/sevenpos-logo-horizontal.png';
-import { AuthSurface } from './AuthSurface';
-import { EXISTING_ACCOUNT_MESSAGE, authMessage } from '../../application/auth/authMessages';
+import React, { useEffect, useRef, useState } from 'react';
+import { Label, ListBox, Select } from '@heroui/react';
+import { AuthLayout } from './AuthLayout';
+import { AuthButton, AuthField, AuthFeedback, PasswordRules } from './AuthControls';
+import { COUNTRY_PROFILES } from '../../config/countries';
+import type { SupportedCountryCode } from '../../types/country';
+import { EXISTING_ACCOUNT_MESSAGE, SAFE_SIGNUP_ACTION } from '../../application/auth/authMessages';
 
 interface RegisterAccountPageProps {
   onRegister: (params: {
@@ -14,6 +14,7 @@ interface RegisterAccountPageProps {
     password: string;
     businessName: string;
     countryCode: string;
+    currencyCode: string;
   }) => Promise<{ success: boolean; error?: string }>;
   onBackToLogin: () => void;
   onForgotPassword?: () => void;
@@ -22,6 +23,7 @@ interface RegisterAccountPageProps {
   defaultEmail?: string;
   defaultBusinessName?: string;
   defaultCountryCode?: string;
+  defaultCurrencyCode?: string;
 }
 
 export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
@@ -31,7 +33,11 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
   defaultFirstName = '', defaultLastName = '', defaultEmail = '',
   defaultBusinessName = '',
   defaultCountryCode = 'CL',
+  defaultCurrencyCode,
 }) => {
+  const [step, setStep] = useState(1);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { stepHeading.current?.focus({ preventScroll: true }); }, [step]);
   const [firstName, setFirstName] = useState(defaultFirstName);
   const [lastName, setLastName] = useState(defaultLastName);
   const [email, setEmail] = useState(defaultEmail);
@@ -39,6 +45,7 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [businessName, setBusinessName] = useState(defaultBusinessName);
   const [countryCode, setCountryCode] = useState(defaultCountryCode);
+  const [currencyCode, setCurrencyCode] = useState(defaultCurrencyCode || (COUNTRY_PROFILES[defaultCountryCode as SupportedCountryCode] ?? COUNTRY_PROFILES.CL).primaryCurrency.code);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -84,219 +91,72 @@ export const RegisterAccountPage: React.FC<RegisterAccountPageProps> = ({
         password,
         businessName: businessName.trim(),
         countryCode,
+        currencyCode,
       });
 
       if (!res.success) {
-        setErrorMessage(res.error || 'Error al registrar cuenta.');
+        setErrorMessage(EXISTING_ACCOUNT_MESSAGE); setStep(2);
       }
-    } catch (err: unknown) {
-      setErrorMessage(authMessage(err, 'No pudimos iniciar el registro. Inténtalo nuevamente.'));
+    } catch {
+      setErrorMessage(EXISTING_ACCOUNT_MESSAGE); setStep(2);
     } finally {
       setPassword(''); setConfirmPassword('');
       setIsSubmitting(false);
     }
   };
 
-  const countryOptions = [
-    { value: 'CL', label: 'Chile (CLP / $)' },
-    { value: 'CO', label: 'Colombia (COP / $)' },
-    { value: 'VE', label: 'Venezuela (VES / USD)' },
-  ];
-
-  return (
-    <AuthSurface><div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-2xl bg-surface border border-border-default rounded-3xl shadow-2xl p-6 sm:p-8 md:p-10 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <img src={sevenposLogo} alt="SevenPOS" className="h-7 w-auto object-contain" />
-          <button
-            type="button"
-            onClick={onBackToLogin}
-            className="text-xs font-semibold text-text-secondary hover:text-text-primary flex items-center gap-1.5 transition-colors"
-          >
-            <ArrowLeft size={14} />
-            <span>Volver a iniciar sesión</span>
-          </button>
-        </div>
-
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold">
-            <Sparkles size={13} />
-            <span>Crear cuenta de negocio</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-text-primary">
-            Crea tu cuenta SevenPOS
-          </h1>
-          <p className="text-xs sm:text-sm text-text-secondary">
-            Registra tus datos y vincula tu negocio para acceder desde cualquier terminal.
-          </p>
-        </div>
-
-        {errorMessage && errorMessage !== EXISTING_ACCOUNT_MESSAGE && (
-          <div className="p-3.5 rounded-xl bg-status-danger/10 border border-status-danger/20 text-status-danger text-xs flex items-center gap-2.5">
-            <AlertCircle size={16} className="shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Section: Personal Info */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-              1. Datos del Propietario
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Nombre *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-tertiary">
-                    <User size={15} />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Ej. José"
-                    className="w-full pl-9 pr-3 py-2 bg-surface-secondary border border-border-default rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Apellido</label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="Ej. Pérez"
-                  className="w-full px-3 py-2 bg-surface-secondary border border-border-default rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary"
-                />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="register-email" className="block text-xs font-semibold text-text-secondary mb-1">Correo electrónico *</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-tertiary">
-                  <Mail size={15} />
-                </div>
-                <input
-                  type="email"
-                  id="register-email"
-                  autoComplete="email"
-                  aria-invalid={errorMessage === EXISTING_ACCOUNT_MESSAGE}
-                  aria-describedby={errorMessage === EXISTING_ACCOUNT_MESSAGE ? 'register-email-error' : undefined}
-                  required
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setErrorMessage(null); }}
-                  placeholder="jose@mipulperia.cl"
-                  className={`w-full pl-9 pr-3 py-2 bg-surface-secondary border rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary ${errorMessage === EXISTING_ACCOUNT_MESSAGE ? 'border-status-danger' : 'border-border-default'}`}
-                />
-              </div>
-              {errorMessage === EXISTING_ACCOUNT_MESSAGE && <div className="mt-2 space-y-2"><p id="register-email-error" role="alert" className="text-xs text-status-danger">{EXISTING_ACCOUNT_MESSAGE}</p><div className="flex flex-wrap gap-3 text-xs font-semibold text-brand-primary"><button type="button" onClick={onBackToLogin}>Iniciar sesión</button>{onForgotPassword && <button type="button" onClick={onForgotPassword}>Recuperar contraseña</button>}</div></div>}
-            </div>
-          </div>
-
-          {/* Section: Business Info */}
-          <div className="space-y-3 pt-2 border-t border-border-default">
-            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-              2. Datos del Negocio
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Nombre comercial *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-tertiary">
-                    <Store size={15} />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="Ej. Minimarket Don Pepe"
-                    className="w-full pl-9 pr-3 py-2 bg-surface-secondary border border-border-default rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">País *</label>
-                <Select
-                  options={countryOptions}
-                  value={countryCode}
-                  onChange={setCountryCode}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section: Password & Confirmation */}
-          <div className="space-y-3 pt-2 border-t border-border-default">
-            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-              3. Seguridad y Contraseña
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Contraseña *</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-tertiary">
-                    <Lock size={15} />
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-9 pr-3 py-2 bg-surface-secondary border border-border-default rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1">Confirmar contraseña *</label>
-                <input
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 bg-surface-secondary border border-border-default rounded-xl text-sm text-text-primary focus:outline-none focus:border-brand-primary"
-                />
-              </div>
-            </div>
-
-            {/* Password Validation Indicators */}
-            <div className="p-3 bg-surface-secondary/60 rounded-xl border border-border-default/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-              <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-status-success font-medium' : 'text-text-tertiary'}`}>
-                {hasMinLength ? <Check size={13} /> : <X size={13} />}
-                <span>8+ caracteres</span>
-              </div>
-              <div className={`flex items-center gap-1.5 ${hasUpperCase ? 'text-status-success font-medium' : 'text-text-tertiary'}`}>
-                {hasUpperCase ? <Check size={13} /> : <X size={13} />}
-                <span>1 Mayúscula</span>
-              </div>
-              <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-status-success font-medium' : 'text-text-tertiary'}`}>
-                {hasNumber ? <Check size={13} /> : <X size={13} />}
-                <span>1 Número</span>
-              </div>
-              <div className={`flex items-center gap-1.5 ${hasSpecialChar ? 'text-status-success font-medium' : 'text-text-tertiary'}`}>
-                {hasSpecialChar ? <Check size={13} /> : <X size={13} />}
-                <span>1 Especial (!@#)</span>
-              </div>
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            variant="brand"
-            size="lg"
-            isLoading={isSubmitting}
-            disabled={!isPasswordValid || !doPasswordsMatch}
-            rightIcon={<ArrowRight size={16} />}
-            className="w-full font-bold pt-3"
-          >
-            Crear cuenta y continuar
-          </Button>
-        </form>
+  const country = COUNTRY_PROFILES[countryCode as SupportedCountryCode] ?? COUNTRY_PROFILES.CL;
+  function nextStep(event: React.FormEvent) {
+    event.preventDefault();
+    if (step === 3) { void handleSubmit(event); return; }
+    setErrorMessage(null);
+    if (step === 1 && !businessName.trim()) { setErrorMessage('Ingresa el nombre de tu negocio.'); return; }
+    if (step === 2 && !firstName.trim()) { setErrorMessage('Ingresa tu nombre.'); return; }
+    setStep(step + 1);
+  }
+  const stepNames = ['Datos del negocio', 'Datos del propietario', 'Datos de seguridad'];
+  return <AuthLayout illustration={step === 1 ? 'business' : step === 2 ? 'owner' : 'security'}>
+    <h1>Crea tu cuenta</h1>
+    <div className="auth-step-heading">
+      <h2 id="register-step-title" ref={stepHeading} tabIndex={-1}>{stepNames[step - 1]}</h2>
+      <div className="auth-step-track" role="progressbar" aria-label="Progreso de registro" aria-valuemin={1} aria-valuemax={3} aria-valuenow={step} aria-valuetext={`Paso ${step} de 3: ${stepNames[step - 1]}`}>
+        {[1,2,3].map(value => <span key={value} data-active={step === value} />)}
       </div>
-    </div></AuthSurface>
-  );
+    </div>
+    {errorMessage && errorMessage !== EXISTING_ACCOUNT_MESSAGE && <AuthFeedback>{errorMessage}</AuthFeedback>}
+    <form className="auth-form" onSubmit={nextStep} aria-labelledby="register-step-title" aria-busy={isSubmitting}>
+      <div className="auth-step-fields" key={step}>
+        {step === 1 && <>
+          <AuthField id="register-business" label="Nombre comercial" value={businessName} onChange={setBusinessName} autoComplete="organization" maxLength={200} required />
+          <Select className="auth-field" value={country.countryCode} onChange={value => { if (value) { const code = String(value) as SupportedCountryCode; setCountryCode(code); setCurrencyCode(COUNTRY_PROFILES[code].primaryCurrency.code); } }} isRequired>
+            <Label className="auth-label">País / Moneda</Label>
+            <Select.Trigger className="auth-country-trigger"><Select.Value /><Select.Indicator /></Select.Trigger>
+            <Select.Popover className="auth-country-popover"><ListBox>{Object.values(COUNTRY_PROFILES).map(profile => <ListBox.Item key={profile.countryCode} id={profile.countryCode} textValue={profile.countryName}>{profile.countryName} · {profile.primaryCurrency.code}</ListBox.Item>)}</ListBox></Select.Popover>
+          </Select>
+          {country.secondaryCurrency ? <Select className="auth-field" value={currencyCode} onChange={value => value && setCurrencyCode(String(value))} isRequired>
+            <Label className="auth-label">Moneda</Label>
+            <Select.Trigger className="auth-country-trigger"><Select.Value /><Select.Indicator /></Select.Trigger>
+            <Select.Popover className="auth-country-popover"><ListBox>{[country.primaryCurrency, country.secondaryCurrency].map(currency => <ListBox.Item key={currency.code} id={currency.code} textValue={currency.code}>{currency.code}</ListBox.Item>)}</ListBox></Select.Popover>
+          </Select> : <p className="auth-currency">Moneda: {currencyCode} · según tu país</p>}
+        </>}
+        {step === 2 && <>
+          <AuthField id="register-first-name" label="Nombres" value={firstName} onChange={setFirstName} autoComplete="given-name" maxLength={100} required />
+          <AuthField id="register-last-name" label="Apellidos" value={lastName} onChange={setLastName} autoComplete="family-name" maxLength={100} />
+          <AuthField id="register-email" label="Correo electrónico" type="email" value={email} onChange={value => {setEmail(value);setErrorMessage(null);}} autoComplete="email" required error={errorMessage === EXISTING_ACCOUNT_MESSAGE ? EXISTING_ACCOUNT_MESSAGE : undefined} />
+          {errorMessage === EXISTING_ACCOUNT_MESSAGE && <p className="auth-error">{SAFE_SIGNUP_ACTION}</p>}
+          {errorMessage === EXISTING_ACCOUNT_MESSAGE && <div className="auth-inline-actions"><button className="auth-link" type="button" onClick={onBackToLogin}>Iniciar sesión</button>{onForgotPassword && <button className="auth-link" type="button" onClick={onForgotPassword}>Recuperar contraseña</button>}</div>}
+        </>}
+        {step === 3 && <>
+          <AuthField id="register-password" label="Contraseña" type="password" value={password} onChange={setPassword} autoComplete="new-password" required />
+          <AuthField id="register-confirm-password" label="Confirmar contraseña" type="password" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" required error={confirmPassword && !doPasswordsMatch ? 'Las contraseñas no coinciden.' : undefined} />
+          <PasswordRules password={password} />
+        </>}
+      </div>
+      <div className="auth-step-actions">
+        <AuthButton type="submit" busy={isSubmitting} isDisabled={step === 3 && (!isPasswordValid || !doPasswordsMatch)}>{isSubmitting ? 'Creando cuenta…' : step === 3 ? 'Crear cuenta' : 'Siguiente'}</AuthButton>
+        {step > 1 && <button type="button" className="auth-link" disabled={isSubmitting} onClick={() => {setStep(step - 1);setErrorMessage(null);}}>Atrás</button>}
+      </div>
+    </form>
+    <p className="auth-footer">¿Ya tienes una cuenta? <button className="auth-link" type="button" disabled={isSubmitting} onClick={onBackToLogin}>Inicia sesión</button></p>
+  </AuthLayout>;
 };

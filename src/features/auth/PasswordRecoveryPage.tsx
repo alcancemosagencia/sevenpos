@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { getSupabaseClient } from '../../infrastructure/cloud/supabaseClient';
 import { getCustomerAppUrl } from '../../app/customerAppUrls';
-import { AuthSurface } from './AuthSurface';
+import { AuthLayout } from './AuthLayout';
+import { AuthButton, AuthField, AuthFeedback, PasswordRules } from './AuthControls';
 
 /** Consumes a recovery session on the same origin where the old email link lands. */
 export function PasswordRecoveryPage() {
@@ -59,31 +60,16 @@ export function PasswordRecoveryPage() {
     }
   }
 
-  return (
-    <AuthSurface><main className="min-h-screen bg-background text-text-primary flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-border-default bg-surface p-8 shadow-xl">
-        <p className="text-sm font-semibold text-brand-primary">SevenPOS</p>
-        <h1 className="mt-4 text-2xl font-bold">Restablecer contraseña</h1>
-        {complete ? (
-          <p className="mt-5 text-sm">Contraseña actualizada. Ya puedes iniciar sesión en la aplicación.</p>
-        ) : ready ? (
-          <form onSubmit={savePassword} className="mt-6 space-y-4">
-            <label className="block text-sm">Nueva contraseña
-              <input className="mt-1 w-full rounded-lg border border-border-default bg-background p-3" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} />
-            </label>
-            <label className="block text-sm">Confirmar contraseña
-              <input className="mt-1 w-full rounded-lg border border-border-default bg-background p-3" type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} required minLength={8} />
-            </label>
-            <button className="w-full rounded-lg bg-brand-primary p-3 font-semibold text-white disabled:opacity-50" type="submit" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar contraseña'}
-            </button>
-          </form>
-        ) : !error ? (
-          <p className="mt-5 text-sm">Validando enlace…</p>
-        ) : null}
-        {error && <p role="alert" className="mt-4 text-sm text-status-danger">{error}</p>}
-        <a className="mt-6 inline-block text-sm text-brand-primary underline" href={getCustomerAppUrl('/login')}>Ir al inicio de sesión</a>
-      </div>
-    </main></AuthSurface>
-  );
+  return <AuthLayout illustration="security">
+    <h1>Restablece tu contraseña</h1>
+    <p className="auth-description">Elige una nueva contraseña para volver a tu negocio con seguridad.</p>
+    {complete ? <AuthFeedback success>Contraseña actualizada. Ya puedes iniciar sesión en la aplicación.</AuthFeedback> : ready ? <form className="auth-form" onSubmit={savePassword} aria-busy={saving}>
+      <AuthField label="Nueva contraseña" type="password" autoComplete="new-password" value={password} onChange={setPassword} required minLength={8} />
+      <AuthField label="Confirmar nueva contraseña" type="password" autoComplete="new-password" value={confirm} onChange={setConfirm} required minLength={8} />
+      <PasswordRules password={password} />
+      <AuthButton type="submit" busy={saving}>{saving ? 'Guardando…' : 'Guardar contraseña'}</AuthButton>
+    </form> : !error ? <p role="status" className="auth-description">Validando enlace…</p> : null}
+    {error && <AuthFeedback>{error}</AuthFeedback>}
+    <p className="auth-footer"><a className="auth-link" href={getCustomerAppUrl('/login')}>Ir al inicio de sesión</a></p>
+  </AuthLayout>;
 }

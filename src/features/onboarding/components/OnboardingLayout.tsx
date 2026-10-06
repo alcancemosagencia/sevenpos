@@ -1,7 +1,4 @@
 import React from 'react';
-import { Sun, Moon } from 'lucide-react';
-import { useTheme } from '../../../context/ThemeContext';
-import { IconButton } from '../../../components/ui/IconButton';
 import horizontalLogo from '../../../assets/branding/sevenpos-logo-horizontal.png';
 import ownerIllustration from '../../../assets/illustrations/onboarding-owner.png';
 import successIllustration from '../../../assets/illustrations/onboarding-success.png';
@@ -27,24 +24,12 @@ export const OnboardingLayout: React.FC<OnboardingLayoutProps> = ({
   heroSubheadline = 'Configuremos lo esencial para que puedas comenzar a vender con SevenPOS.',
   isCompletion = false,
 }) => {
-  const { theme, toggleTheme } = useTheme();
   const progressPercent = Math.round((currentStep / totalSteps) * 100);
   const illustration = isCompletion ? successIllustration : ownerIllustration;
 
   return (
     <div className="min-h-screen w-full bg-background text-text-primary flex items-center justify-center p-3 sm:p-6 md:p-8 lg:p-10 select-none overflow-x-hidden relative">
-      {/* Global Theme Toggle available across all Onboarding Steps */}
-      <div className="fixed top-3.5 right-3.5 sm:top-5 sm:right-5 z-40">
-        <IconButton
-          variant="secondary"
-          size="md"
-          ariaLabel={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-          onClick={toggleTheme}
-          className="shadow-xs"
-        >
-          {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-        </IconButton>
-      </div>
+
 
       <div className="w-full max-w-5xl bg-surface border border-border-default rounded-[var(--radius-modal)] shadow-[var(--shadow-elevated)] overflow-hidden flex flex-col lg:flex-row min-h-[580px] sm:min-h-[620px]">
         {/* 1. Left Brand / Visual Hero Panel (Visible on lg 1024px+) */}

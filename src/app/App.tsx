@@ -1,3 +1,4 @@
+import { AuthSurface } from '../features/auth/AuthSurface';
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from '../context/ThemeContext';
 import { CountryProvider } from '../context/CountryContext';
@@ -407,16 +408,16 @@ const AppRoot: React.FC = () => {
   // 2. Loading splash while hydrating
   if (!isHydrated || authMachineState === 'BOOTING') {
     return (
-      <div className="h-screen w-screen bg-background flex items-center justify-center">
+      <AuthSurface><div className="h-screen w-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 rounded-full border-2 border-brand-primary border-t-transparent animate-spin" />
-      </div>
+      </div></AuthSurface>
     );
   }
 
   // 3. Offline on new device
   if (authMachineState === 'OFFLINE_NEW_DEVICE') {
     return (
-      <div className="min-h-screen w-full bg-background flex items-center justify-center p-6 text-center">
+      <AuthSurface><div className="min-h-screen w-full bg-background flex items-center justify-center p-6 text-center">
         <div className="max-w-md bg-surface border border-border-default rounded-3xl p-8 space-y-5 shadow-2xl">
           <div className="w-14 h-14 rounded-2xl bg-status-danger/10 text-status-danger flex items-center justify-center mx-auto">
             <WifiOff size={28} />
@@ -429,14 +430,14 @@ const AppRoot: React.FC = () => {
             Reintentar conexión
           </Button>
         </div>
-      </div>
+      </div></AuthSurface>
     );
   }
 
   // 4. Cloud Configuration Error
   if (authMachineState === 'CLOUD_CONFIGURATION_ERROR') {
     return (
-      <div className="min-h-screen w-full bg-background flex items-center justify-center p-6 text-center">
+      <AuthSurface><div className="min-h-screen w-full bg-background flex items-center justify-center p-6 text-center">
         <div className="max-w-md bg-surface border border-status-danger/30 rounded-3xl p-8 space-y-5 shadow-2xl">
           <div className="w-14 h-14 rounded-2xl bg-status-danger/10 text-status-danger flex items-center justify-center mx-auto">
             <AlertTriangle size={28} />
@@ -447,14 +448,14 @@ const AppRoot: React.FC = () => {
             <code className="font-mono text-brand-primary">VITE_SUPABASE_PUBLISHABLE_KEY</code> deben estar configuradas.
           </p>
         </div>
-      </div>
+      </div></AuthSurface>
     );
   }
 
   // 5. Account Login Required (Email + Password on new device)
   if (authMachineState === 'ACCOUNT_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <AccountLoginPage
           onLogin={signInWithEmail}
           onGoToRegister={() => { setRequestedRecovery(false); goToRegister(); }}
@@ -463,14 +464,14 @@ const AppRoot: React.FC = () => {
           onBack={goToRegister}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 6. Registration Page
   if (authMachineState === 'REGISTER_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <RegisterAccountPage
           onRegister={signUpWithEmail}
           onBackToLogin={() => { setRequestedRecovery(false); goToAccountLogin(); }}
@@ -480,16 +481,17 @@ const AppRoot: React.FC = () => {
           defaultEmail={state.owner.email}
           defaultBusinessName={state.business.name}
           defaultCountryCode={state.countryCode}
+          defaultCurrencyCode={state.regionalSettings.primaryCurrencyCode}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 7. Email Verification Required
   if (authMachineState === 'EMAIL_VERIFICATION_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <VerifyEmailPage
           email={pendingEmailForVerification}
           onVerifyOtp={verifyEmailOtp}
@@ -500,14 +502,14 @@ const AppRoot: React.FC = () => {
           onBackToLogin={() => { setRequestedRecovery(false); goToAccountLogin(); }}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 8. Existing Local Business Link Required (Authenticated user with existing PC business)
   if (authMachineState === 'EXISTING_LOCAL_BUSINESS_LINK_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <ExistingLocalBusinessLinkPage
           userEmail={cloudUser?.email || ''}
           localBusinessName={state.business.name}
@@ -516,14 +518,14 @@ const AppRoot: React.FC = () => {
           onSignOut={signOutCloudAccount}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 9. Business Setup Required (Authenticated user without existing business)
   if (authMachineState === 'BUSINESS_SETUP_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <BusinessSetupPage
           userEmail={cloudUser?.email || ''}
           defaultBusinessName={state.business.name}
@@ -532,53 +534,53 @@ const AppRoot: React.FC = () => {
           onSignOut={signOutCloudAccount}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 8. Device Enrollment Required
   if (authMachineState === 'DEVICE_ENROLLMENT_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <DeviceEnrollmentPage
           businessName={cloudMembership?.businessName || state.business.name || 'Mi Negocio'}
           onEnroll={enrollDevice}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 9. PIN Setup Required
   if (authMachineState === 'PIN_SETUP_REQUIRED') {
     return (
-      <>
+      <AuthSurface>
         <SetupPinModal
           isOpen={true}
           onSavePin={setupNewDevicePin}
         />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 10. Legacy Local Onboarding (First-Run Experience step 1-6)
   if (onboardingStatus === 'incomplete' || isCompletionCelebrationActive) {
     return (
-      <>
+      <AuthSurface>
         <OnboardingFlow />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
   // 11. Locked Session: PIN entry
   if (authMachineState === 'DEVICE_LOCKED') {
     return (
-      <>
+      <AuthSurface>
         <PinLoginPage />
         {renderDevTools()}
-      </>
+      </AuthSurface>
     );
   }
 
