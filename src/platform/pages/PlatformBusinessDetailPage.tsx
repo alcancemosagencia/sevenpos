@@ -100,8 +100,8 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
     );
   }
 
-  const isPro = detail.subscription.planCode === 'PRO' && detail.subscription.status === 'ACTIVE';
-  const isManual = detail.subscription.billingSource === 'MANUAL';
+  const isPro = detail.diagnostic.resolvedEntitlementPlan === 'PRO';
+  const isManual = detail.subscription.billingSource === 'MANUAL' || detail.subscription.billingSource === 'INTERNAL';
   const isMercadoPago = detail.subscription.billingSource === 'MERCADO_PAGO';
 
   const tabs: Array<{ id: DetailTab; label: string; icon: React.ReactNode }> = [
@@ -153,7 +153,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
                 }`}
               >
                 {isPro && <Sparkles size={12} />}
-                <span>Plan {detail.subscription.planCode}</span>
+                <span>Plan {detail.subscription.planCode ?? detail.diagnostic.resolvedEntitlementPlan}</span>
               </span>
               <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-surface-secondary text-text-secondary uppercase">
                 {detail.business.countryCode}
@@ -274,7 +274,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
               </div>
               <div className="py-2.5 flex justify-between">
                 <dt className="text-text-secondary font-medium">Fecha de Registro</dt>
-                <dd className="text-text-primary">{new Date(detail.owner.createdAt).toLocaleString('es-CL')}</dd>
+                <dd className="text-text-primary">{detail.owner.createdAt ? new Date(detail.owner.createdAt).toLocaleString('es-CL') : '—'}</dd>
               </div>
             </dl>
           </div>
@@ -367,7 +367,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 bg-surface-secondary rounded-xl border border-border-subtle space-y-1">
               <div className="text-[11px] font-semibold text-text-secondary">Plan Actual</div>
-              <div className="text-xl font-bold text-text-primary">{detail.subscription.planCode}</div>
+              <div className="text-xl font-bold text-text-primary">{detail.subscription.planCode ?? detail.diagnostic.resolvedEntitlementPlan}</div>
               <div className="text-[10px] text-text-tertiary">Estado: {detail.subscription.status}</div>
             </div>
 
@@ -377,7 +377,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
                 {detail.subscription.billingInterval || 'N/A'}
               </div>
               <div className="text-[10px] text-text-tertiary">
-                {detail.subscription.cancelAtPeriodEnd ? 'Cancelación solicitada' : 'Renovación automática'}
+                {detail.subscription.cancelAtPeriodEnd ? 'Cancelación solicitada' : detail.subscription.billingSource === 'MERCADO_PAGO' ? 'Renovación automática' : 'Vigencia fija'}
               </div>
             </div>
 
@@ -395,7 +395,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
           </div>
 
           {/* Manual Metadata (If source is MANUAL) */}
-          {detail.subscription.billingSource === 'MANUAL' && (
+          {isManual && (
             <div className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl space-y-2">
               <div className="text-xs font-bold text-amber-600 flex items-center gap-1.5">
                 <Wrench size={14} />
@@ -403,7 +403,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div><strong>Motivo:</strong> {detail.subscription.manualReason || 'No especificado'}</div>
-                <div><strong>Activado por:</strong> {detail.subscription.activatedByEmail || 'Admin'}</div>
+                <div><strong>Activado por:</strong> {detail.subscription.activatedByEmail || detail.subscription.activatedByAdminId || '—'}</div>
                 <div><strong>Fecha Activación:</strong> {detail.subscription.manualActivatedAt ? new Date(detail.subscription.manualActivatedAt).toLocaleString('es-CL') : '—'}</div>
                 <div><strong>Nota Interna:</strong> {detail.subscription.manualNotes || 'Sin notas'}</div>
               </div>
@@ -415,7 +415,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
             <div className="p-4 bg-surface-secondary rounded-xl border border-border-subtle space-y-2 text-xs">
               <div className="font-bold text-text-primary">Términos del Contrato Activo (Inmutable)</div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-text-secondary">
-                <div>Versión: {detail.activeContract.pricingVersion}</div>
+                <div>Versión: {detail.activeContract.pricingVersion || '—'}</div>
                 <div>Monto Bruto: ${detail.activeContract.finalGrossAmount.toLocaleString('es-CL')} {detail.activeContract.currency}</div>
                 <div>ID Contrato: <code className="text-[10px]">{detail.activeContract.id}</code></div>
               </div>
@@ -436,7 +436,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
                 <span>Terminales Enrolados</span>
               </span>
               <span className="text-xs font-semibold px-2 py-0.5 bg-surface-secondary rounded-md">
-                {detail.devices.length}
+                {detail.devicesCount ?? '—'}
               </span>
             </h2>
 
@@ -459,7 +459,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-text-tertiary py-4 text-center">No hay terminales enrolados.</p>
+              <p className="text-xs text-text-tertiary py-4 text-center">{detail.devicesCount == null ? 'Información de dispositivos no disponible.' : detail.devicesCount > 0 ? 'El contrato actual entrega solo el conteo de dispositivos.' : 'No hay terminales enrolados.'}</p>
             )}
           </div>
 
@@ -471,7 +471,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
                 <span>Equipo y Membresías Cloud</span>
               </span>
               <span className="text-xs font-semibold px-2 py-0.5 bg-surface-secondary rounded-md">
-                {detail.members.length}
+                {detail.cloudMembershipCount ?? '—'}
               </span>
             </h2>
 
@@ -494,7 +494,7 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-text-tertiary py-4 text-center">No hay miembros registrados.</p>
+              <p className="text-xs text-text-tertiary py-4 text-center">{detail.cloudMembershipCount == null ? 'Información de membresías no disponible.' : detail.cloudMembershipCount > 0 ? 'El contrato actual entrega solo el conteo de membresías cloud.' : 'No hay miembros registrados.'}</p>
             )}
           </div>
 
@@ -550,6 +550,8 @@ export const PlatformBusinessDetailPage: React.FC<PlatformBusinessDetailPageProp
               Bloque de Diagnóstico Interno de Entitlements
             </h2>
           </div>
+
+          {detail.diagnostic.diagnosticMismatch && <p className="text-xs text-text-secondary">El diagnóstico del RPC difiere de la resolución canónica de plan.</p>}
 
           <p className="text-xs text-text-secondary">
             Este bloque expone la verdad factual de la base de datos para diagnosticar discrepancias entre el estado canónico y la resolución en el cliente SevenPOS.

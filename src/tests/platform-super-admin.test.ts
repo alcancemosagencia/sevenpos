@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { isPlatformHost } from '../app/App';
 import { PlatformAdminService } from '../platform/services/PlatformAdminService';
-import { ManualProActivationParams } from '../platform/types/PlatformTypes';
+import {type GrantInput} from '../platform/services/PlatformRpcCompatibilityAdapter';
 
 const mockSupabase = {
   rpc: vi.fn(),
@@ -188,10 +188,10 @@ describe('PLATFORM-01 — Super Admin Platform, Business Directory & Manual PRO 
       const res = await service.listBusinesses({
         search: 'Ferretería',
         plan: 'PRO',
-        source: 'MANUAL',
+        billingSource: 'MANUAL',
         country: 'CL',
-        page: 1,
-        pageSize: 25,
+        offset: 0,
+        limit: 25,
       });
 
       expect(res.items).toHaveLength(1);
@@ -205,6 +205,7 @@ describe('PLATFORM-01 — Super Admin Platform, Business Directory & Manual PRO 
   // 5. MANUAL PRO ACTIVATION & MERCADO PAGO PROTECTION
   describe('5. Manual PRO Activation & Business Lifecycle', () => {
     it('activates manual PRO successfully for courtesy/tester with 0 payment', async () => {
+      mockSupabase.rpc.mockResolvedValueOnce({data:{items:[],total_count:0},error:null});
       mockSupabase.rpc.mockResolvedValueOnce({
         data: {
           success: true,
@@ -218,13 +219,12 @@ describe('PLATFORM-01 — Super Admin Platform, Business Directory & Manual PRO 
         error: null,
       });
 
-      const params: ManualProActivationParams = {
+      const params: GrantInput = {
         businessId: 'biz-tester',
         interval: 'MONTHLY',
-        startsAt: '2026-09-21T00:00:00Z',
-        periodEnd: '2026-10-21T23:59:59Z',
+        startAt: '2026-09-21T00:00:00Z',
         reason: 'TESTER',
-        notes: 'Cuenta beta ferretería familiar',
+        internalNote: 'Cuenta beta ferretería familiar',
       };
 
       const res = await service.activateManualPro(params);
@@ -232,18 +232,17 @@ describe('PLATFORM-01 — Super Admin Platform, Business Directory & Manual PRO 
       expect(mockSupabase.rpc).toHaveBeenCalledWith('platform_activate_manual_pro', {
         p_business_id: 'biz-tester',
         p_interval: 'MONTHLY',
-        p_starts_at: '2026-09-21T00:00:00Z',
-        p_period_end: '2026-10-21T23:59:59Z',
+        p_start_at: '2026-09-21T00:00:00Z',
         p_reason: 'TESTER',
-        p_amount: 0,
-        p_currency: 'CLP',
-        p_payment_method: null,
+        p_amount_minor: 0,
+        p_currency: null,
         p_reference: null,
-        p_notes: 'Cuenta beta ferretería familiar',
+        p_internal_note: 'Cuenta beta ferretería familiar',
       });
     });
 
     it('rejects manual activation when business already has an active Mercado Pago PRO subscription', async () => {
+      mockSupabase.rpc.mockResolvedValueOnce({data:{items:[],total_count:0},error:null});
       mockSupabase.rpc.mockResolvedValueOnce({
         data: null,
         error: { message: 'CANNOT_OVERWRITE_ACTIVE_MERCADO_PAGO_PRO: Business already has an active provider-backed subscription' },
@@ -252,13 +251,12 @@ describe('PLATFORM-01 — Super Admin Platform, Business Directory & Manual PRO 
       const res = await service.activateManualPro({
         businessId: 'biz-mp',
         interval: 'MONTHLY',
-        startsAt: '2026-09-21T00:00:00Z',
-        periodEnd: '2026-10-21T23:59:59Z',
+        startAt: '2026-09-21T00:00:00Z',
         reason: 'FRIEND_FAMILY',
       });
 
       expect(res.success).toBe(false);
-      expect(res.error).toContain('CANNOT_OVERWRITE_ACTIVE_MERCADO_PAGO_PRO');
+      expect(res.error).toContain('suscripción activa con Mercado Pago');
     });
 
     it('terminates manual PRO and returns business to FREE while preserving history', async () => {

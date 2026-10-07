@@ -1,3 +1,4 @@
+import {platformRpcCompatibility} from '../services/PlatformRpcCompatibilityAdapter';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getSupabaseClient } from '../../infrastructure/cloud/supabaseClient';
 import { PlatformAdmin } from '../types/PlatformTypes';
@@ -57,6 +58,7 @@ export const PlatformAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await refreshAdmin();
       } else if (event === 'SIGNED_OUT') {
+        platformRpcCompatibility.reset();
         setAdmin(null);
         setIsLoading(false);
       }
@@ -92,7 +94,8 @@ export const PlatformAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Authorize strictly against platform_admins table
       const currentAdmin = await platformAdminService.getCurrentAdmin();
       if (!currentAdmin) {
-        await supabase.auth.signOut();
+        platformRpcCompatibility.reset();
+      await supabase.auth.signOut();
         setAdmin(null);
         const deniedMsg = 'No tienes acceso a SevenPOS Platform.';
         setAuthError(deniedMsg);
@@ -114,6 +117,7 @@ export const PlatformAuthProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       setIsLoading(true);
       const supabase = getSupabaseClient();
+      platformRpcCompatibility.reset();
       await supabase.auth.signOut();
       setAdmin(null);
     } catch (err) {

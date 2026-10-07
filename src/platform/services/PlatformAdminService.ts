@@ -1,10 +1,10 @@
+import {platformRpcCompatibility, platformError, type GrantInput, type ListInput} from './PlatformRpcCompatibilityAdapter';
 import { getSupabaseClient } from '../../infrastructure/cloud/supabaseClient';
 import {
   PlatformAdmin,
   PlatformDashboardMetrics,
   PlatformBusinessListResponse,
   PlatformBusinessDetail,
-  ManualProActivationParams,
 } from '../types/PlatformTypes';
 
 export class PlatformAdminService {
@@ -20,10 +20,11 @@ export class PlatformAdminService {
       return null;
     }
 
-    if (!data || !data.is_admin) {
+    if (!data || !data.is_admin || data.role !== 'SUPER_ADMIN' || ('is_active' in data && data.is_active !== true)) {
       return null;
     }
 
+    platformRpcCompatibility.setIdentity(data.user_id);
     return {
       id: data.id,
       userId: data.user_id,
@@ -70,68 +71,21 @@ export class PlatformAdminService {
   /**
    * Fetches server-paginated list of businesses with search and filters.
    */
-  async listBusinesses(params: {
-    search?: string;
-    plan?: string;
-    status?: string;
-    source?: string;
-    country?: string;
-    page?: number;
-    pageSize?: number;
-  }): Promise<PlatformBusinessListResponse> {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc('platform_list_businesses', {
-      p_search: params.search || null,
-      p_plan: params.plan || null,
-      p_status: params.status || null,
-      p_source: params.source || null,
-      p_country: params.country || null,
-      p_page: params.page || 1,
-      p_page_size: params.pageSize || 25,
-    });
-
-    if (error) {
-      throw new Error(`Error al listar negocios: ${error.message}`);
-    }
-
-    return {
-      items: (data.items ?? []).map((item: Record<string, unknown>) => ({
-        businessId: String(item.business_id),
-        businessName: String(item.business_name || 'Sin nombre'),
-        countryCode: String(item.country_code || 'CL'),
-        createdAt: String(item.created_at),
-        ownerUserId: String(item.owner_user_id || ''),
-        ownerEmail: String(item.owner_email || ''),
-        ownerName: String(item.owner_name || 'Propietario'),
-        planCode: (item.plan_code as 'FREE' | 'PRO') || 'FREE',
-        subscriptionStatus: (item.subscription_status as 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED') || 'ACTIVE',
-        billingSource: (item.billing_source as import('../types/PlatformTypes').BillingSource) || 'NONE',
-        manualReason: item.manual_reason ? (item.manual_reason as import('../types/PlatformTypes').ManualReason) : null,
-        currentPeriodEnd: item.current_period_end ? String(item.current_period_end) : null,
-        activeDevicesCount: Number(item.active_devices_count || 0),
-        activeMembersCount: Number(item.active_members_count || 0),
-      })),
-      totalCount: Number(data.total_count || 0),
-      page: Number(data.page || 1),
-      pageSize: Number(data.page_size || 25),
-      totalPages: Number(data.total_pages || 1),
-    };
+  async listBusinesses(params: ListInput): Promise<PlatformBusinessListResponse> {
+    const result = await platformRpcCompatibility.list(params);
+    return {items:result.items as PlatformBusinessListResponse['items'],
+      totalCount:result.totalCount,page:result.offset/result.limit+1,pageSize:result.limit,totalPages:Math.ceil(result.totalCount/result.limit)};
   }
 
   /**
    * Fetches complete detail for a specific business.
    */
   async getBusinessDetail(businessId: string): Promise<PlatformBusinessDetail> {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc('platform_get_business_detail', {
-      p_business_id: businessId,
-    });
-
-    if (error) {
-      throw new Error(`Error al cargar detalle del negocio: ${error.message}`);
-    }
-
+    const data = await platformRpcCompatibility.detail(businessId);
     return {
+      devicesCount: data.devices_count,
+      cloudMembershipCount: data.cloud_membership_count,
+      subscriptionEvents: data.subscription_events,
       business: {
         id: data.business.id,
         name: data.business.name,
@@ -154,6 +108,7 @@ export class PlatformAdminService {
         manualReason: data.subscription.manual_reason,
         manualNotes: data.subscription.manual_notes,
         activatedByEmail: data.subscription.activated_by_email,
+        activatedByAdminId: data.subscription.activated_by_admin_id,
         manualActivatedAt: data.subscription.manual_activated_at,
         mpPreapprovalId: data.subscription.mp_preapproval_id,
         currentPeriodStart: data.subscription.current_period_start,
@@ -213,7 +168,8 @@ export class PlatformAdminService {
         canonicalStatus: data.diagnostic.canonical_status,
         canonicalSource: data.diagnostic.canonical_source,
         hasActiveContract: Boolean(data.diagnostic.has_active_contract),
-        resolvedEntitlementPlan: data.subscription.plan_code === 'PRO' && data.subscription.status === 'ACTIVE' ? 'PRO' : 'FREE',
+        resolvedEntitlementPlan: data.diagnostic.resolved_entitlement_plan,
+        diagnosticMismatch: data.diagnostic.diagnostic_mismatch,
       },
     };
   }
@@ -221,26 +177,9 @@ export class PlatformAdminService {
   /**
    * Activates Manual PRO canonically with reasons, immutable contract, and audit trail.
    */
-  async activateManualPro(params: ManualProActivationParams): Promise<{ success: boolean; error?: string }> {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc('platform_activate_manual_pro', {
-      p_business_id: params.businessId,
-      p_interval: params.interval,
-      p_starts_at: params.startsAt,
-      p_period_end: params.periodEnd,
-      p_reason: params.reason,
-      p_amount: params.amount || 0,
-      p_currency: params.currency || 'CLP',
-      p_payment_method: params.paymentMethod || null,
-      p_reference: params.reference || null,
-      p_notes: params.notes || null,
-    });
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: Boolean(data?.success) };
+  async activateManualPro(params: GrantInput): Promise<{success:boolean;error?:string}> {
+    try { return await platformRpcCompatibility.activate(params); }
+    catch(error) { return {success:false,error:error instanceof Error?error.message:platformError(null)}; }
   }
 
   /**

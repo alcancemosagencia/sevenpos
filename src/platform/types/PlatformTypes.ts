@@ -41,20 +41,22 @@ export interface PlatformDashboardMetrics {
 }
 
 export interface PlatformBusinessListItem {
+  effectivePlan: 'FREE' | 'PRO';
+  lastActivityAt: string | null;
   businessId: string;
   businessName: string;
-  countryCode: string;
-  createdAt: string;
-  ownerUserId: string;
-  ownerEmail: string;
-  ownerName: string;
-  planCode: 'FREE' | 'PRO';
-  subscriptionStatus: 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED';
-  billingSource: BillingSource;
+  country: string | null;
+  createdAt: string | null;
+  ownerUserId: string | null;
+  ownerEmail: string | null;
+  ownerName: string | null;
+  planCode: 'FREE' | 'PRO' | null;
+  subscriptionStatus: 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED' | null;
+  billingSource: BillingSource | null;
   manualReason?: ManualReason | null;
   currentPeriodEnd?: string | null;
-  activeDevicesCount: number;
-  activeMembersCount: number;
+  deviceCount: number | null;
+  cloudMembershipCount: number | null;
 }
 
 export interface PlatformBusinessListResponse {
@@ -66,6 +68,10 @@ export interface PlatformBusinessListResponse {
 }
 
 export interface PlatformBusinessDetail {
+  devicesCount: number | null;
+  cloudMembershipCount: number | null;
+  subscriptionEvents: Array<{id:string;event_type:string;created_at:string}>;
+
   business: {
     id: string;
     name: string;
@@ -74,20 +80,21 @@ export interface PlatformBusinessDetail {
     updatedAt: string;
   };
   owner: {
-    userId: string;
-    email: string;
-    name: string;
-    createdAt: string;
+    userId: string | null;
+    email: string | null;
+    name: string | null;
+    createdAt: string | null;
   };
   subscription: {
     id?: string;
-    planCode: 'FREE' | 'PRO';
-    status: 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED';
+    planCode: 'FREE' | 'PRO' | null;
+    status: 'PENDING' | 'ACTIVE' | 'PAST_DUE' | 'EXPIRED' | null;
     billingInterval?: 'MONTHLY' | 'ANNUAL' | null;
-    billingSource: BillingSource;
+    billingSource: BillingSource | null;
     manualReason?: ManualReason | null;
     manualNotes?: string | null;
     activatedByEmail?: string | null;
+    activatedByAdminId?: string | null;
     manualActivatedAt?: string | null;
     mpPreapprovalId?: string | null;
     currentPeriodStart?: string | null;
@@ -146,6 +153,7 @@ export interface PlatformBusinessDetail {
     canonicalSource: BillingSource;
     hasActiveContract: boolean;
     resolvedEntitlementPlan?: 'FREE' | 'PRO' | 'No disponible';
+    diagnosticMismatch?: boolean;
     canonicalCountry?: string;
     resolvedLocalCountry?: string;
     canonicalCurrency?: string;
@@ -158,14 +166,10 @@ export interface PlatformBusinessDetail {
 export interface ManualProActivationParams {
   businessId: string;
   interval: 'MONTHLY' | 'ANNUAL';
-  startsAt: string;
-  periodEnd: string;
-  reason: ManualReason;
-  amount?: number;
-  currency?: string;
-  paymentMethod?: string;
+  startAt: string;
+  reason: Exclude<ManualReason, 'ASSISTED_SALE'>;
   reference?: string;
-  notes?: string;
+  internalNote?: string;
 }
 
 export interface PlatformUpdateRegionParams {

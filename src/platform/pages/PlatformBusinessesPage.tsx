@@ -46,11 +46,11 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
       const res = await platformAdminService.listBusinesses({
         search: search.trim() || undefined,
         plan: planFilter !== 'ALL' ? planFilter : undefined,
-        status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        source: sourceFilter !== 'ALL' ? sourceFilter : undefined,
+        subscriptionStatus: statusFilter !== 'ALL' ? statusFilter : undefined,
+        billingSource: sourceFilter !== 'ALL' ? sourceFilter : undefined,
         country: countryFilter !== 'ALL' ? countryFilter : undefined,
-        page,
-        pageSize,
+        offset: (page-1)*pageSize,
+        limit: pageSize,
       });
 
       setItems(res.items);
@@ -68,11 +68,11 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
     platformAdminService.listBusinesses({
       search: search.trim() || undefined,
       plan: planFilter !== 'ALL' ? planFilter : undefined,
-      status: statusFilter !== 'ALL' ? statusFilter : undefined,
-      source: sourceFilter !== 'ALL' ? sourceFilter : undefined,
+      subscriptionStatus: statusFilter !== 'ALL' ? statusFilter : undefined,
+      billingSource: sourceFilter !== 'ALL' ? sourceFilter : undefined,
       country: countryFilter !== 'ALL' ? countryFilter : undefined,
-      page,
-      pageSize,
+      offset: (page-1)*pageSize,
+      limit: pageSize,
     })
       .then((res) => {
         if (isMounted) {
@@ -124,7 +124,7 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
     { value: 'CO', label: '🇨🇴 Colombia' },
   ];
 
-  const getSourceBadge = (source: string, reason?: string | null) => {
+  const getSourceBadge = (source: string | null, reason?: string | null) => {
     switch (source) {
       case 'MERCADO_PAGO':
         return (
@@ -326,7 +326,7 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
                 </tr>
               ) : (
                 items.map((b) => {
-                  const isPro = b.planCode === 'PRO' && b.subscriptionStatus === 'ACTIVE';
+                  const isPro = b.effectivePlan === 'PRO';
                   return (
                     <tr
                       key={b.businessId}
@@ -348,7 +348,7 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
                         </div>
                       </td>
                       <td className="py-3.5 px-4 font-bold text-text-secondary uppercase">
-                        {b.countryCode}
+                        {b.country}
                       </td>
                       <td className="py-3.5 px-4">
                         <span
@@ -359,7 +359,7 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
                           }`}
                         >
                           {isPro && <Sparkles size={11} />}
-                          <span>{b.planCode}</span>
+                          <span>{b.planCode ?? b.effectivePlan}</span>
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
@@ -369,16 +369,16 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
                         <div className="flex items-center gap-3 text-[11px]">
                           <span className="flex items-center gap-1" title="Dispositivos activos">
                             <Smartphone size={13} className="text-text-tertiary" />
-                            <span>{b.activeDevicesCount}</span>
+                            <span>{b.deviceCount ?? '—'}</span>
                           </span>
                           <span className="flex items-center gap-1" title="Usuarios en equipo">
                             <Users size={13} className="text-text-tertiary" />
-                            <span>{b.activeMembersCount}</span>
+                            <span>{b.cloudMembershipCount ?? '—'}</span>
                           </span>
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-[11px] text-text-tertiary">
-                        {new Date(b.createdAt).toLocaleDateString('es-CL')}
+                        {b.createdAt ? new Date(b.createdAt).toLocaleDateString('es-CL') : '—'}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <button
@@ -414,7 +414,7 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
           </div>
         ) : (
           items.map((b) => {
-            const isPro = b.planCode === 'PRO' && b.subscriptionStatus === 'ACTIVE';
+            const isPro = b.effectivePlan === 'PRO';
             return (
               <div
                 key={b.businessId}
@@ -438,18 +438,18 @@ export const PlatformBusinessesPage: React.FC<PlatformBusinessesPageProps> = ({
                     }`}
                   >
                     {isPro && <Sparkles size={11} />}
-                    <span>{b.planCode}</span>
+                    <span>{b.planCode ?? b.effectivePlan}</span>
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-1 border-t border-border-subtle">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-text-tertiary uppercase">{b.countryCode}</span>
+                    <span className="font-bold text-text-tertiary uppercase">{b.country}</span>
                     <span>&bull;</span>
                     {getSourceBadge(b.billingSource, b.manualReason)}
                   </div>
                   <div className="text-[11px] text-text-tertiary">
-                    {new Date(b.createdAt).toLocaleDateString('es-CL')}
+                    {b.createdAt ? new Date(b.createdAt).toLocaleDateString('es-CL') : '—'}
                   </div>
                 </div>
               </div>

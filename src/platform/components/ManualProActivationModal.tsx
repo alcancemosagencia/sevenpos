@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Sparkles, X, CheckCircle2, ShieldAlert } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Sparkles, X, ShieldAlert } from 'lucide-react';
 import { Select } from '../../components/ui/Select';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { DatePicker } from '../../components/ui/DatePicker';
-import { ManualReason } from '../types/PlatformTypes';
+import {platformRpcCompatibility, platformError, type GrantInput, type RpcVersion} from '../services/PlatformRpcCompatibilityAdapter';
 import { platformAdminService } from '../services/PlatformAdminService';
 
 interface ManualProActivationModalProps {
@@ -22,103 +22,58 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
   onClose,
   onSuccess,
 }) => {
-  const [reason, setReason] = useState<ManualReason>('TESTER');
+  const [reason, setReason] = useState<GrantInput['reason']>('TESTER');
   const [interval, setInterval] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
   
   // Date calculations
   const todayStr = new Date().toISOString().split('T')[0];
   const [startsAt, setStartsAt] = useState<string>(todayStr);
 
-  const getSuggestedEnd = (start: string, intv: 'MONTHLY' | 'ANNUAL'): string => {
-    const d = new Date(start || todayStr);
-    if (intv === 'MONTHLY') {
-      d.setMonth(d.getMonth() + 1);
-    } else {
-      d.setFullYear(d.getFullYear() + 1);
-    }
-    return d.toISOString().split('T')[0];
-  };
-
-  const [periodEnd, setPeriodEnd] = useState<string>(() => getSuggestedEnd(todayStr, 'MONTHLY'));
-  
-  // Assisted sale fields
-  const [amount, setAmount] = useState<string>('');
-  const currency = 'CLP';
-  const [paymentMethod, setPaymentMethod] = useState<string>('TRANSFER');
   const [reference, setReference] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [version,setVersion]=useState<RpcVersion>('UNKNOWN');
+  useEffect(()=>{
+    if(!isOpen)return;
+    let current=true;
+    platformRpcCompatibility.list({limit:1,offset:0}).then(()=>{if(current)setVersion(platformRpcCompatibility.getVersion());})
+      .catch(error=>{if(current){setVersion('UNKNOWN');setErrorMessage(error instanceof Error?error.message:platformError(null));}});
+    return()=>{current=false;};
+  },[isOpen]);
+  const handleClose=()=>{setVersion('UNKNOWN');onClose();};
   if (!isOpen) return null;
 
   const reasonOptions = [
-    { value: 'TESTER', label: 'Beta Tester' },
-    { value: 'FRIEND_FAMILY', label: 'Cortesía / Familiar' },
-    { value: 'ASSISTED_SALE', label: 'Venta Asistida (Cobro Manual)' },
-    { value: 'COMPENSATION', label: 'Compensación de Servicio' },
-    { value: 'INTERNAL', label: 'Cuenta Interna / Demostración' },
-    { value: 'OTHER', label: 'Otro Motivo' },
+    { value: 'TESTER', label: 'Tester' },
+    { value: 'FRIEND_FAMILY', label: 'Amigos y familiares' },
+    { value: 'COMPENSATION', label: 'Compensación' },
+    { value: 'INTERNAL', label: 'Interno' },
+    { value: 'OTHER', label: 'Otro' },
   ];
-
-  const paymentMethodOptions = [
-    { value: 'TRANSFER', label: 'Transferencia Bancaria' },
-    { value: 'CASH', label: 'Efectivo' },
-    { value: 'OTHER', label: 'Otro Medio' },
-  ];
-
-  const handleIntervalChange = (newInterval: 'MONTHLY' | 'ANNUAL') => {
-    setInterval(newInterval);
-    setPeriodEnd(getSuggestedEnd(startsAt, newInterval));
-  };
-
-  const handleStartsAtChange = (newStart: string) => {
-    setStartsAt(newStart);
-    setPeriodEnd(getSuggestedEnd(newStart, interval));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!startsAt || !periodEnd) {
-      setErrorMessage('Debes especificar las fechas de inicio y término del período.');
-      return;
-    }
-
-    if (new Date(periodEnd) <= new Date(startsAt)) {
-      setErrorMessage('La fecha de término debe ser posterior a la fecha de inicio.');
-      return;
-    }
-
-    let parsedAmount = 0;
-    if (reason === 'ASSISTED_SALE') {
-      parsedAmount = parseInt(amount.replace(/\D/g, ''), 10) || 0;
-      if (parsedAmount <= 0) {
-        setErrorMessage('Ingresa el monto pagado para la venta asistida.');
-        return;
-      }
-    }
-
+    if(version!=='PLATFORM01B') {setErrorMessage(platformError(new Error('LEGACY_ACTIVATION_DISABLED')));return;}
+    if(!startsAt){setErrorMessage('Debes indicar la fecha de inicio.');return;}
     setIsSubmitting(true);
     try {
       const res = await platformAdminService.activateManualPro({
         businessId,
         interval,
-        startsAt: new Date(startsAt).toISOString(),
-        periodEnd: new Date(`${periodEnd}T23:59:59Z`).toISOString(),
+        startAt: new Date(startsAt).toISOString(),
         reason,
-        amount: parsedAmount,
-        currency,
-        paymentMethod: reason === 'ASSISTED_SALE' ? paymentMethod : undefined,
         reference: reference.trim() || undefined,
-        notes: notes.trim() || undefined,
+        internalNote: notes.trim() || undefined,
       });
 
       if (res.success) {
         onSuccess();
-        onClose();
+        handleClose();
       } else {
         setErrorMessage(res.error || 'Error al activar Plan PRO.');
       }
@@ -150,7 +105,7 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-text-tertiary hover:text-text-primary rounded-xl hover:bg-surface-hover transition-colors cursor-pointer"
           >
             <X size={18} />
@@ -176,7 +131,7 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
             <Select
               options={reasonOptions}
               value={reason}
-              onChange={(v) => setReason(v as ManualReason)}
+              onChange={(v) => setReason(v as GrantInput['reason'])}
               className="w-full"
               buttonClassName="w-full text-xs"
             />
@@ -190,7 +145,7 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => handleIntervalChange('MONTHLY')}
+                onClick={() => setInterval('MONTHLY')}
                 className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
                   interval === 'MONTHLY'
                     ? 'bg-brand-primary text-white border-brand-primary shadow-xs'
@@ -201,7 +156,7 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
               </button>
               <button
                 type="button"
-                onClick={() => handleIntervalChange('ANNUAL')}
+                onClick={() => setInterval('ANNUAL')}
                 className={`py-2 px-3 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
                   interval === 'ANNUAL'
                     ? 'bg-brand-primary text-white border-brand-primary shadow-xs'
@@ -218,60 +173,16 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
             <DatePicker
               label="Fecha de Inicio"
               value={startsAt}
-              onChange={(val) => handleStartsAtChange(val)}
+              onChange={(val) => setStartsAt(val)}
             />
 
-            <DatePicker
-              label="Término del Período"
-              value={periodEnd}
-              onChange={(val) => setPeriodEnd(val)}
-            />
           </div>
-
-          {/* Progressive Fields: ONLY IF ASSISTED SALE */}
-          {reason === 'ASSISTED_SALE' && (
-            <div className="p-4 bg-surface-secondary rounded-2xl border border-border-subtle space-y-3 animate-in fade-in-50 duration-150">
-              <div className="text-xs font-bold text-text-primary flex items-center gap-1.5">
-                <CheckCircle2 size={14} className="text-emerald-500" />
-                <span>Datos Comerciales de Venta Asistida</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-text-secondary">Monto Pagado (Bruto)</label>
-                  <Input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="19990"
-                    className="w-full text-xs"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-text-secondary">Medio de Pago</label>
-                  <Select
-                    options={paymentMethodOptions}
-                    value={paymentMethod}
-                    onChange={(v) => setPaymentMethod(v)}
-                    className="w-full"
-                    buttonClassName="w-full text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-text-secondary">Referencia / Comprobante (opcional)</label>
-                <Input
-                  type="text"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  placeholder="Ej: Transf. Santander #94821"
-                  className="w-full text-xs"
-                />
-              </div>
-            </div>
-          )}
+          <p className="text-xs text-text-secondary">El backend calcula el término del período. Venta asistida: Próximamente.</p>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-text-secondary">Referencia (opcional)</label>
+            <Input value={reference} onChange={event=>setReference(event.target.value)} />
+          </div>
+          {version!=='PLATFORM01B' && <p role="status" className="text-xs text-text-secondary">Activación manual temporalmente deshabilitada durante actualización de Platform.</p>}
 
           {/* Internal Note */}
           <div className="space-y-1.5">
@@ -294,7 +205,7 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-default">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isSubmitting}
               className="px-4 py-2 text-xs font-semibold text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded-xl border border-border-default transition-colors cursor-pointer"
             >
@@ -302,7 +213,7 @@ export const ManualProActivationModal: React.FC<ManualProActivationModalProps> =
             </button>
             <Button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || version!=='PLATFORM01B'}
               className="px-5 py-2 text-xs font-semibold bg-brand-primary hover:bg-brand-primary-hover text-white rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               {isSubmitting ? 'Activando...' : 'Confirmar Activación PRO'}
