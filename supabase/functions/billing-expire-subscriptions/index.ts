@@ -4,6 +4,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 function isAuthorizedScheduler(req: Request): boolean {
+  // Vercel scheduler uses x-cron-secret. Legacy service-role callers remain compatible.
   const authHeader = req.headers.get('Authorization');
   const cronSecret = req.headers.get('x-cron-secret');
   const expectedSecret = Deno.env.get('CRON_SECRET');
@@ -14,7 +15,10 @@ function isAuthorizedScheduler(req: Request): boolean {
 
 Deno.serve(async (req: Request) => {
   if (!isAuthorizedScheduler(req)) {
-    return new Response(JSON.stringify({ error: 'UNAUTHORIZED_SCHEDULER' }), { status: 401 });
+    return new Response(JSON.stringify({ error: 'UNAUTHORIZED_SCHEDULER' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);

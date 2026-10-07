@@ -9,13 +9,15 @@ uses Web Request/Response handlers; the Vite frontend is unchanged.
 
 ## Credentials and access
 
-Production-only Vercel secrets: `CRON_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`.
+Production-only Vercel scheduler secret: `CRON_SECRET`, identical to the Edge
+`CRON_SECRET`. The caller sends only `x-cron-secret`; it neither reads nor sends
+the service-role credential. Supabase's service-role built-in stays internal to Edge.
 Server upstream configuration: `SUPABASE_URL`, fixed to the production project.
 No secret uses a `VITE_` prefix or is imported by frontend source.
 Missing/wrong cron authorization returns 401 before upstream activity. Secrets,
 upstream bodies, headers and exception messages are never logged or returned.
-The Edge retains the existing service-role bearer and optional `x-cron-secret`
-authorization contracts. No unrelated function authorization changes.
+The Edge prioritizes the existing `x-cron-secret` authorization branch and retains
+legacy service-role bearer compatibility. No unrelated function auth changes.
 RPC EXECUTE remains service_role-only (authenticated/anon denied).
 
 ## Release order and validation

@@ -37,6 +37,21 @@ function fixture(manualExpired = 1, manualError: object | null = null, serviceKe
   return { handler, createClient, rpc, filters, writes };
 }
 describe('deployed Edge maintenance contract', () => {
+  it('rejects a wrong x-cron-secret before creating any Supabase client', async () => {
+    const f = fixture();
+    const response = await f.handler(new Request('https://example.com', { headers: { 'x-cron-secret': 'wrong' } }));
+    expect(response.status).toBe(401);
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(await response.json()).toEqual({ error: 'UNAUTHORIZED_SCHEDULER' });
+    expect(f.createClient).not.toHaveBeenCalled();
+  });
+  it('authorizes x-cron-secret independently and uses only built-ins for the internal client', async () => {
+    const f = fixture(0);
+    const response = await f.handler(new Request('https://example.com', { headers: { 'x-cron-secret': 'edge-cron-secret', authorization: 'Bearer wrong' } }));
+    expect(response.status).toBe(200);
+    expect(f.createClient).toHaveBeenCalledExactlyOnceWith('https://example.supabase.co', 'server-key');
+    expect(f.rpc).toHaveBeenCalledExactlyOnceWith('platform_expire_manual_pro');
+  });
   it.each([undefined, 'Bearer invalid', 'Bearer undefined'])('rejects %s without any database call', async (authorization) => {
     const f = fixture();
     expect((await f.handler(new Request('https://example.com', { headers: authorization ? { authorization } : {} }))).status).toBe(401);

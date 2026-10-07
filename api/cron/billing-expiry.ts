@@ -13,16 +13,15 @@ export async function GET(request: Request): Promise<Response> {
   )) return respond(401, { success: false, error: 'UNAUTHORIZED_SCHEDULER' });
 
   const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   // This production maintenance route must never target an arbitrary upstream.
-  if (supabaseUrl !== 'https://byrjbrmsyusonhjovavp.supabase.co' || !serviceKey) {
+  if (supabaseUrl !== 'https://byrjbrmsyusonhjovavp.supabase.co') {
     return respond(503, { success: false, error: 'SCHEDULER_NOT_CONFIGURED' });
   }
 
   try {
     const upstream = await fetch(`${supabaseUrl}/functions/v1/billing-expire-subscriptions`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey },
+      headers: { 'x-cron-secret': secret },
       signal: AbortSignal.timeout(25_000),
       redirect: 'error',
     });

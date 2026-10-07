@@ -29,10 +29,11 @@ describe('server cron authorization and sanitized Edge boundary', () => {
     expect((await GET(request('Bearer test-cron-secret'))).status).toBe(503);
     expect(fetch).not.toHaveBeenCalled();
   });
-  it('requires a separate server-side Supabase credential', async () => {
+  it('does not require or forward a Supabase service-role credential from Vercel', async () => {
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
-    expect((await GET(request('Bearer test-cron-secret'))).status).toBe(503);
-    expect(fetch).not.toHaveBeenCalled();
+    vi.mocked(fetch).mockResolvedValue(Response.json({ success: true, manualExpired: 0, providerExpired: 0, expired: 0 }));
+    expect((await GET(request('Bearer test-cron-secret'))).status).toBe(200);
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ headers: { 'x-cron-secret': 'test-cron-secret' } }));
   });
   it('returns only validated operational counts and preserves zero on retry', async () => {
     for (const count of [1, 0]) {
@@ -42,7 +43,7 @@ describe('server cron authorization and sanitized Edge boundary', () => {
       expect(response.headers.get('cache-control')).toBe('no-store');
       expect(await response.json()).toEqual({ success: true, manualExpired: count, providerExpired: 0, expired: count });
     }
-    expect(fetch).toHaveBeenCalledWith('https://byrjbrmsyusonhjovavp.supabase.co/functions/v1/billing-expire-subscriptions', expect.objectContaining({ method: 'POST', redirect: 'error', headers: { Authorization: 'Bearer test-server-key', apikey: 'test-server-key' } }));
+    expect(fetch).toHaveBeenCalledWith('https://byrjbrmsyusonhjovavp.supabase.co/functions/v1/billing-expire-subscriptions', expect.objectContaining({ method: 'POST', redirect: 'error', headers: { 'x-cron-secret': 'test-cron-secret' } }));
   });
   it.each([{}, { success: false }, { success: true, manualExpired: -1, providerExpired: 0, expired: -1 }, { success: true, manualExpired: 1, providerExpired: 0, expired: 2 }])('rejects an invalid upstream result', async (body) => {
     vi.mocked(fetch).mockResolvedValue(Response.json(body));
