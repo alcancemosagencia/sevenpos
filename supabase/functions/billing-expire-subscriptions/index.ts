@@ -8,7 +8,7 @@ function isAuthorizedScheduler(req: Request): boolean {
   const cronSecret = req.headers.get('x-cron-secret');
   const expectedSecret = Deno.env.get('CRON_SECRET');
   if (cronSecret && expectedSecret && cronSecret === expectedSecret) return true;
-  if (authHeader && authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) return true;
+  if (SUPABASE_SERVICE_ROLE_KEY && authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) return true;
   return false;
 }
 
@@ -20,12 +20,19 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const now = new Date().toISOString();
 
+  // One transaction handles fixed manual terms and their event evidence.
+  const { data: manualExpired, error: manualError } = await supabase.rpc('platform_expire_manual_pro');
+  if (manualError) {
+    return new Response(JSON.stringify({ error: 'MANUAL_EXPIRY_FAILED' }), { status: 500 });
+  }
+
   // 1. Expire subscriptions past their period end (cancel_at_period_end)
   const { data: toExpire } = await supabase
     .from('business_subscriptions')
     .select('id, business_id, status')
     .eq('status', 'ACTIVE')
     .eq('cancel_at_period_end', true)
+    .not('billing_source', 'in', '(MANUAL,INTERNAL,PROMOTIONAL)')
     .lte('current_period_end', now);
 
   for (const sub of (toExpire ?? [])) {
@@ -52,6 +59,7 @@ Deno.serve(async (req: Request) => {
     .from('business_subscriptions')
     .select('id, business_id, status')
     .eq('status', 'PAST_DUE')
+    .not('billing_source', 'in', '(MANUAL,INTERNAL,PROMOTIONAL)')
     .lte('past_due_since', graceCutoff);
 
   for (const sub of (pastDueExpired ?? [])) {
@@ -72,7 +80,15 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return new Response(JSON.stringify({
-    expired: (toExpire?.length ?? 0) + (pastDueExpired?.length ?? 0),
-  }), { status: 200 });
+  const result = {
+    success: true,
+    manualExpired: Number(manualExpired),
+    providerExpired: (toExpire?.length ?? 0) + (pastDueExpired?.length ?? 0),
+    expired: Number(manualExpired) + (toExpire?.length ?? 0) + (pastDueExpired?.length ?? 0),
+  };
+  console.info(JSON.stringify({ action: 'billing_expiry', ...result }));
+  return new Response(JSON.stringify(result), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
 });

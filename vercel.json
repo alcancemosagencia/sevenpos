@@ -12,6 +12,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/cron/billing-expiry",
+      "destination": "/api/cron/billing-expiry"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
