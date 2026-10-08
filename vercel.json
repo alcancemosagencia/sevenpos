@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/billing-expiry",
+      "schedule": "10 5 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/brand/(.*)",
